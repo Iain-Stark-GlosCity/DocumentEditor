@@ -12,12 +12,14 @@ import { fileCommands } from "./file-commands";
 import { recovery } from "./recovery";
 import { help } from "./help";
 import { preview } from "./preview";
+import { spellcheck } from "./spellcheck";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
 import { tabs } from "./tabs";
 import { theme } from "./theme";
 import { uiCommands } from "./ui-commands";
 import { windowTitle } from "./window-title";
+import { wordCount } from "./word-count";
 
 export const defaultFeatures: readonly Feature[] = [
   fileCommands,
@@ -35,4 +37,6 @@ export const defaultFeatures: readonly Feature[] = [
   autosave,
   recovery,
   preview,
+  spellcheck,
+  wordCount,
 ];

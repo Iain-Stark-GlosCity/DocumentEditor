@@ -60,6 +60,7 @@ describe("menu bar", () => {
       "Select next occurrenceCtrl+D",
       "Select all occurrencesCtrl+Shift+L",
       "Go to lineCtrl+G",
+      "Toggle spellcheck",
     ]);
     expect(textsOf("View")).toEqual([
       "Toggle word wrapAlt+Z",
@@ -73,6 +74,7 @@ describe("menu bar", () => {
       "Toggle split previewAlt+P",
       "Switch focus between editor and previewF6",
       "Command paletteCtrl+Shift+P",
+      "Toggle word count",
     ]);
     expect(textsOf("Help")).toEqual(["About DocumentEditor"]);
   });

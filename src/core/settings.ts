@@ -45,6 +45,8 @@ export const SETTINGS_SCHEMA = {
   "editor.wordWrap": bool(true),
   "editor.lineNumbers": bool(false),
   "editor.viewMode": oneOf(["source", "live", "split"], "source"),
+  "editor.spellcheck": bool(true),
+  "statusBar.wordCount": bool(true),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),
