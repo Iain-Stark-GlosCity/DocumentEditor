@@ -78,3 +78,12 @@ describe("MemoryPlatform", () => {
     expect(p.windowTitle).toBe("Hello");
   });
 });
+
+describe("MemoryPlatform settings", () => {
+  it("returns null until settings are written, then what was written", async () => {
+    const platform = new MemoryPlatform();
+    expect(await platform.readSettings()).toBeNull();
+    await platform.writeSettings('{"editor.fontSize":18}');
+    expect(await platform.readSettings()).toBe('{"editor.fontSize":18}');
+  });
+});

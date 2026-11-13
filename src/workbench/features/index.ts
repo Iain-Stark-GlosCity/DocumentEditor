@@ -1,0 +1,28 @@
+/**
+ * Every feature the app ships with. To add one: create a file in this folder that exports a
+ * `Feature` and add one line below. Nothing else needs to change.
+ */
+import type { Feature } from "../feature";
+import { editCommands } from "./edit-commands";
+import { editorAppearance } from "./editor-appearance";
+import { fileCommands } from "./file-commands";
+import { help } from "./help";
+import { statusCursor } from "./status-cursor";
+import { statusFormat } from "./status-format";
+import { tabs } from "./tabs";
+import { theme } from "./theme";
+import { uiCommands } from "./ui-commands";
+import { windowTitle } from "./window-title";
+
+export const defaultFeatures: readonly Feature[] = [
+  fileCommands,
+  editCommands,
+  editorAppearance,
+  theme,
+  tabs,
+  uiCommands,
+  help,
+  statusCursor,
+  statusFormat,
+  windowTitle,
+];

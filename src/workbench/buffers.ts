@@ -12,6 +12,10 @@ export class BufferStore {
     this.states.set(id, state);
   }
 
+  ids(): string[] {
+    return [...this.states.keys()];
+  }
+
   delete(id: string): void {
     this.states.delete(id);
   }
