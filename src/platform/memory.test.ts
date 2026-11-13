@@ -23,6 +23,17 @@ describe("MemoryPlatform", () => {
     expect((await p.readFile("/a.md")).modifiedMs).toBe(second.modifiedMs);
   });
 
+  it("stats a file's modified time without reading it, and returns null when missing", async () => {
+    const p = new MemoryPlatform();
+    expect(await p.statFile("/a.md")).toBeNull();
+    const { modifiedMs } = await p.writeFile("/a.md", "one", utf16);
+    const read = vi.spyOn(p, "readFile");
+    expect(await p.statFile("/a.md")).toEqual({ modifiedMs });
+    expect(read).not.toHaveBeenCalled();
+    const next = await p.writeFile("/a.md", "two", utf16);
+    expect((await p.statFile("/a.md"))?.modifiedMs).toBe(next.modifiedMs);
+  });
+
   it("returns queued dialog results, and cancel values when the queue is empty", async () => {
     const p = new MemoryPlatform();
     expect(await p.showOpenDialog({ filters: [], multiple: true })).toEqual([]);

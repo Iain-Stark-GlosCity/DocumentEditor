@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 
-use crate::assets::asset_dir_for;
+use crate::assets::asset_dirs_for;
 use crate::atomic::atomic_write;
 use crate::textfile::{self, FileFormat};
+use crate::watch::{event_is_for, watch_target, CASE_INSENSITIVE};
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -45,7 +46,9 @@ pub struct AppState {
     pub pending_open: Mutex<Vec<String>>,
     /// Set once the front end has called `take_open_requests`; later requests are emitted.
     pub frontend_ready: AtomicBool,
-    watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+    /// Active watches by the id `watch_file` returned. Dropping a watcher stops it.
+    watchers: Mutex<HashMap<u64, RecommendedWatcher>>,
+    next_watch_id: AtomicU64,
 }
 
 #[derive(Serialize)]
@@ -73,7 +76,8 @@ pub struct RecoverySnapshot {
 
 #[derive(Serialize, Clone)]
 struct FileChange {
-    path: String,
+    /// The id `watch_file` returned for the watch this event belongs to.
+    id: u64,
     kind: &'static str,
 }
 
@@ -82,12 +86,23 @@ fn modified_ms(path: &Path) -> Result<u64> {
     Ok(modified.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0))
 }
 
-/// Let the webview load images from the folder of a file we read or wrote, so a document can show
-/// its local images. The asset protocol scope starts empty (not global); this is the only place
-/// it grows. Failure is not fatal: the document still opens, its local images just will not load.
-fn allow_assets_beside(app: &AppHandle, file: &Path) {
-    if let Some(dir) = asset_dir_for(file) {
+/// Let the webview load images from the folder of a file we read or wrote, and from that folder's
+/// parent (so `../images/x.png` works), unless the parent is a drive or profile root. The asset
+/// protocol scope starts empty (not global); this is the only place it grows. Failure is not
+/// fatal: the document still opens, its local images just will not load.
+fn allow_assets_beside(app: &AppHandle, file: &str) {
+    for dir in asset_dirs_for(file) {
         let _ = app.asset_protocol_scope().allow_directory(dir, true);
+    }
+}
+
+/// The modified time of a file without reading it, or `None` if it does not exist.
+#[tauri::command]
+pub fn stat_file(path: String) -> Result<Option<WriteResult>> {
+    match modified_ms(Path::new(&path)) {
+        Ok(modified_ms) => Ok(Some(WriteResult { modified_ms })),
+        Err(AppError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -95,7 +110,7 @@ fn allow_assets_beside(app: &AppHandle, file: &Path) {
 pub fn read_file(app: AppHandle, path: String) -> Result<FileData> {
     let bytes = fs::read(&path)?;
     let (text, format) = textfile::decode(&bytes)?;
-    allow_assets_beside(&app, Path::new(&path));
+    allow_assets_beside(&app, &path);
     Ok(FileData { text, format, modified_ms: modified_ms(Path::new(&path))? })
 }
 
@@ -104,7 +119,7 @@ pub fn read_file(app: AppHandle, path: String) -> Result<FileData> {
 pub fn write_file(app: AppHandle, path: String, text: String, format: FileFormat) -> Result<WriteResult> {
     let target = PathBuf::from(&path);
     atomic_write(&target, &textfile::encode(&text, &format))?;
-    allow_assets_beside(&app, &target);
+    allow_assets_beside(&app, &path);
     Ok(WriteResult { modified_ms: modified_ms(&target)? })
 }
 
@@ -130,14 +145,14 @@ pub fn write_settings(app: AppHandle, json: String) -> Result<()> {
     Ok(())
 }
 
-/// Watches the file's folder (a watch on the file itself is lost when an atomic save replaces
-/// it) and reports events for that file name. Events carry the path exactly as registered.
+/// Watches the file's folder (a watch on the file itself is lost when an editor saves by deleting
+/// and renaming) and reports events for that file name. Returns an id; every `file-changed`
+/// event carries it, so the front end matches on the id and never on the path the OS reports.
 #[tauri::command]
-pub fn watch_file(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<()> {
-    let target = PathBuf::from(&path);
-    let dir = target.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf();
-    let file_name = target.file_name().map(|n| n.to_os_string());
-    let key = path.clone();
+pub fn watch_file(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<u64> {
+    let (dir, file_name) = watch_target(Path::new(&path))
+        .ok_or_else(|| AppError::Other(format!("Cannot watch {path}: it has no file name")))?;
+    let id = state.next_watch_id.fetch_add(1, Ordering::SeqCst);
 
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else { return };
@@ -146,21 +161,22 @@ pub fn watch_file(app: AppHandle, state: State<'_, AppState>, path: String) -> R
             EventKind::Create(_) | EventKind::Modify(_) => "modified",
             _ => return,
         };
-        if event.paths.iter().any(|p| p.file_name().map(|n| n.to_os_string()) == file_name) {
-            let _ = app.emit("file-changed", FileChange { path: path.clone(), kind });
+        if event_is_for(&event.paths, &file_name, CASE_INSENSITIVE) {
+            let _ = app.emit("file-changed", FileChange { id, kind });
         }
     })?;
     watcher.watch(&dir, RecursiveMode::NonRecursive)?;
 
     let mut watchers = state.watchers.lock().map_err(|_| AppError::Other("watcher lock poisoned".into()))?;
-    watchers.insert(key, watcher);
-    Ok(())
+    watchers.insert(id, watcher);
+    Ok(id)
 }
 
+/// Stops a watch and releases its watcher (and the OS handle on the folder).
 #[tauri::command]
-pub fn unwatch_file(state: State<'_, AppState>, path: String) -> Result<()> {
+pub fn unwatch_file(state: State<'_, AppState>, id: u64) -> Result<()> {
     let mut watchers = state.watchers.lock().map_err(|_| AppError::Other("watcher lock poisoned".into()))?;
-    watchers.remove(&path); // Dropping the watcher stops it.
+    watchers.remove(&id); // Dropping the watcher stops it.
     Ok(())
 }
 

@@ -110,6 +110,15 @@ export const externalChanges: Feature = {
         if (watch.stopped) return;
         let data;
         try {
+          // Look at the modified time first: most events need no read.
+          const stat = await wb.platform.statFile(watch.path);
+          if (stat === null) throw new Error("File not found");
+          const known = find(id);
+          if (known && !known.missingOnDisk && stat.modifiedMs === known.modifiedMs) {
+            if (wb.isSaving(id)) continue;
+            watch.sawRemoved = false;
+            return;
+          }
           data = await wb.platform.readFile(watch.path);
         } catch {
           // Unreadable. If the platform said it was removed, believe it; otherwise wait for
@@ -223,9 +232,12 @@ export const externalChanges: Feature = {
         if (path !== doc.path || doc.missingOnDisk) return true;
         let disk;
         try {
+          const stat = await wb.platform.statFile(path);
+          if (stat === null) return true; // Gone: saving recreates it.
+          if (stat.modifiedMs === doc.modifiedMs) return true; // Unchanged, so not stale.
           disk = await wb.platform.readFile(path);
         } catch {
-          return true; // Gone: saving recreates it.
+          return true;
         }
         if (!isStaleOnDisk(doc.modifiedMs, disk.modifiedMs, disk.text, text)) return true;
         if (!interactive) {

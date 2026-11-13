@@ -13,8 +13,8 @@ import type { Workbench } from "../workbench";
 
 interface Candidate {
   snapshot: RecoverySnapshot;
-  /** The file as it is on disk now, or null if it is gone (or the snapshot is untitled). */
-  disk: FileData | null;
+  /** The file's modified time on disk now, or null if it is gone (or the snapshot is untitled). */
+  diskModifiedMs: number | null;
 }
 
 /**
@@ -155,6 +155,15 @@ async function readOrNull(wb: Workbench, path: string | null): Promise<FileData 
   }
 }
 
+async function statOrNull(wb: Workbench, path: string | null): Promise<number | null> {
+  if (path === null) return null;
+  try {
+    return (await wb.platform.statFile(path))?.modifiedMs ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function offerRestore(
   wb: Workbench,
   ids: Map<string, string>,
@@ -164,9 +173,12 @@ async function offerRestore(
   const snapshots = sortSnapshots((await wb.platform.listRecovery()).filter((s) => !own.has(s.id)));
   if (snapshots.length === 0) return;
   const candidates: Candidate[] = await Promise.all(
-    snapshots.map(async (snapshot) => ({ snapshot, disk: await readOrNull(wb, snapshot.path) })),
+    snapshots.map(async (snapshot) => ({
+      snapshot,
+      diskModifiedMs: await statOrNull(wb, snapshot.path),
+    })),
   );
-  const describe = (c: Candidate) => describeSnapshot(c.snapshot, c.disk?.modifiedMs ?? null);
+  const describe = (c: Candidate) => describeSnapshot(c.snapshot, c.diskModifiedMs);
 
   const choice = await wb.ask({
     title: "Recover unsaved work?",
@@ -227,7 +239,7 @@ function blankUntitled(wb: Workbench): string | null {
 /** Opens a snapshot as a dirty tab. Returns the document id, or null if it was left alone. */
 async function restoreOne(
   wb: Workbench,
-  { snapshot, disk }: Candidate,
+  { snapshot }: Candidate,
   ids: Map<string, string>,
   written: Set<string>,
 ): Promise<string | null> {
@@ -251,6 +263,7 @@ async function restoreOne(
       return null;
     }
     // The file's own encoding, BOM and line endings come from disk, so Save writes it back as it was.
+    const disk = await readOrNull(wb, snapshot.path);
     const data = disk ?? { text: "", format: { ...DEFAULT_FILE_FORMAT }, modifiedMs: 0 };
     id = store.openFromFile(snapshot.path, data, provider.id);
     if (disk === null) {

@@ -28,6 +28,10 @@ export class TauriPlatform implements Platform {
     return call<FileData>("read_file", { path });
   }
 
+  statFile(path: string): Promise<{ modifiedMs: number } | null> {
+    return call<{ modifiedMs: number } | null>("stat_file", { path });
+  }
+
   writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }> {
     return call<{ modifiedMs: number }>("write_file", { path, text, format });
   }
@@ -47,18 +51,32 @@ export class TauriPlatform implements Platform {
   }
 
   async watchFile(path: string, onChange: (change: FileChange) => void): Promise<() => void> {
-    const unlisten = await listen<FileChange>("file-changed", (event) => {
-      if (event.payload.path === path) onChange(event.payload);
+    // The Rust side tags each watch with an id and puts it in every event, so matching does not
+    // depend on how the OS spells the path (case, slashes, verbatim prefix).
+    interface Payload {
+      id: number;
+      kind: FileChange["kind"];
+    }
+    let watchId: number | null = null;
+    const early: Payload[] = []; // Events that arrive before `watch_file` has returned its id.
+    const unlisten = await listen<Payload>("file-changed", (event) => {
+      if (watchId === null) early.push(event.payload);
+      else if (event.payload.id === watchId) onChange({ path, kind: event.payload.kind });
     });
+    let id: number;
     try {
-      await call<void>("watch_file", { path });
+      id = await call<number>("watch_file", { path });
     } catch (error) {
       unlisten();
       throw error;
     }
+    watchId = id;
+    for (const event of early) {
+      if (event.id === id) onChange({ path, kind: event.kind });
+    }
     return () => {
       unlisten();
-      void call<void>("unwatch_file", { path });
+      void call<void>("unwatch_file", { id });
     };
   }
 
