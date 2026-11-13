@@ -3,6 +3,7 @@ import type { TextFormatProvider } from "../../core/format";
 import { outlineFromState } from "./outline";
 import { tableCommands, tableExtensions } from "./tables";
 import type { OutlineItem, TextFormatProvider } from "../../core/format";
+import { markdownImage, markdownLink } from "./images";
 
 /**
  * The unified pipeline is large, so it is loaded when a render is first requested (CLAUDE.md
@@ -26,6 +27,9 @@ export const markdownProvider: TextFormatProvider = {
   editorExtensions: () => [markdown({ base: markdownLanguage })],
   commands: [...tableCommands],
   editorExtensions: (context) => {
+  imageSyntax: markdownImage,
+  linkSyntax: markdownLink,
+  editorExtensions: () => {
     // Opening a Markdown document starts loading the pipeline in the background, so that the
     // synchronous `outline` below has it ready by the time the outline panel asks.
     void loadPipeline();

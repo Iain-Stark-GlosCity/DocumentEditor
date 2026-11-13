@@ -9,11 +9,13 @@ use std::time::UNIX_EPOCH;
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 
 use crate::assets::asset_dirs_for;
 use crate::atomic::atomic_write;
+use crate::binary::{self, BinaryError};
 use crate::textfile::{self, FileFormat};
 use crate::watch::{event_is_for, watch_target, CASE_INSENSITIVE};
 
@@ -29,6 +31,9 @@ pub enum AppError {
     Watch(#[from] notify::Error),
     #[error("{0}")]
     Other(String),
+    /// The `exists:` prefix is how the front end recognises it (see `TauriPlatform`).
+    #[error("exists: {0}")]
+    Exists(String),
 }
 
 // Commands reject with a plain string, which the front end turns into an Error.
@@ -121,6 +126,44 @@ pub fn write_file(app: AppHandle, path: String, text: String, format: FileFormat
     atomic_write(&target, &textfile::encode(&text, &format))?;
     allow_assets_beside(&app, &path);
     Ok(WriteResult { modified_ms: modified_ms(&target)? })
+}
+
+fn binary_error(e: BinaryError, path: &str) -> AppError {
+    match e {
+        BinaryError::Exists => AppError::Exists(path.to_string()),
+        BinaryError::Io(e) => AppError::Io(e),
+    }
+}
+
+fn header<'a>(request: &'a Request<'_>, name: &str) -> Result<&'a str> {
+    request
+        .headers()
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AppError::Other(format!("Missing {name} header")))
+}
+
+/// Writes raw bytes atomically, creating parent folders. The bytes travel as the raw request
+/// body (no JSON or base64); the path (percent-encoded) and the overwrite flag travel as
+/// headers. Rejects with `exists: <path>` if the file exists and `x-overwrite` is not `1`.
+#[tauri::command]
+pub fn write_binary_file(app: AppHandle, request: Request<'_>) -> Result<()> {
+    let path = binary::percent_decode(header(&request, "x-path")?).map_err(AppError::Other)?;
+    let overwrite = header(&request, "x-overwrite")? == "1";
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err(AppError::Other("Expected a raw binary body".into()));
+    };
+    binary::write_bytes(Path::new(&path), bytes, overwrite).map_err(|e| binary_error(e, &path))?;
+    allow_assets_beside(&app, &path);
+    Ok(())
+}
+
+/// Copies a file atomically, creating parent folders, refusing to overwrite unless asked.
+#[tauri::command]
+pub fn copy_file(app: AppHandle, from: String, to: String, overwrite: bool) -> Result<()> {
+    binary::copy_to(Path::new(&from), Path::new(&to), overwrite).map_err(|e| binary_error(e, &to))?;
+    allow_assets_beside(&app, &to);
+    Ok(())
 }
 
 fn settings_file(app: &AppHandle) -> Result<PathBuf> {

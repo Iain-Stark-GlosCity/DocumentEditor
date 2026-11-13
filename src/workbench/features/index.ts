@@ -14,6 +14,7 @@ import { outline } from "./outline";
 import { paneFocus } from "./pane-focus";
 import { recovery } from "./recovery";
 import { help } from "./help";
+import { images } from "./images";
 import { preview } from "./preview";
 import { spellcheck } from "./spellcheck";
 import { statusCursor } from "./status-cursor";
@@ -48,4 +49,5 @@ export const defaultFeatures: readonly Feature[] = [
   spellcheck,
   wordCount,
   tableMenu,
+  images,
 ];

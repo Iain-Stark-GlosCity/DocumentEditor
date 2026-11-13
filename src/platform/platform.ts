@@ -60,12 +60,49 @@ export function isExternalUrl(url: string): boolean {
   return EXTERNAL_SCHEMES.test(url.trim());
 }
 
+/** Thrown by `writeBinaryFile` and `copyFile` when the target exists and `overwrite` is false. */
+export class FileExistsError extends Error {
+  readonly code = "exists";
+  constructor(readonly path: string) {
+    super(`File already exists: ${path}`);
+    this.name = "FileExistsError";
+  }
+}
+
+/** Files dragged from the operating system onto the window. Coordinates are CSS pixels. */
+export interface FilesDroppedEvent {
+  paths: string[];
+  x: number;
+  y: number;
+}
+
+/** Where an Explorer drag currently is over the window (CSS pixels), or null once it has left. */
+export type FileDragPosition = { x: number; y: number } | null;
+
 export interface Platform {
   readFile(path: string): Promise<FileData>;
   /** The file's modified time without reading it, or null if it does not exist. */
   statFile(path: string): Promise<{ modifiedMs: number } | null>;
   /** Atomic: writes a temporary file beside the target, then renames over it. */
   writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }>;
+
+  /**
+   * Atomic: writes the bytes beside the target and renames, creating parent folders. Rejects with
+   * `FileExistsError` if the target exists and `options.overwrite` is false.
+   */
+  writeBinaryFile(path: string, bytes: Uint8Array, options: { overwrite: boolean }): Promise<void>;
+  /** Same rules as `writeBinaryFile`, copying an existing file. */
+  copyFile(from: string, to: string, options: { overwrite: boolean }): Promise<void>;
+  /** Whether a file or folder exists at the path. */
+  fileExists(path: string): Promise<boolean>;
+
+  /**
+   * Files dropped from the operating system (for example Explorer) onto the window. In the desktop
+   * app the webview's own drop events carry no paths, so this is the only way to receive them.
+   */
+  onFilesDropped(handler: (event: FilesDroppedEvent) => void): Promise<() => void>;
+  /** An Explorer drag moving over the window (for a drop indicator); null when it leaves or ends. */
+  onFileDragOver(handler: (position: FileDragPosition) => void): Promise<() => void>;
 
   /** Returns the chosen paths, or an empty array if the dialog was cancelled. */
   showOpenDialog(options: { filters: FileFilter[]; multiple: boolean }): Promise<string[]>;

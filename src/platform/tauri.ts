@@ -1,17 +1,38 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   isExternalUrl,
+  FileExistsError,
   type FileChange,
+  type FileDragPosition,
+  type FilesDroppedEvent,
   type FileData,
   type FileFilter,
   type FileFormat,
   type Platform,
   type RecoverySnapshot,
 } from "./platform";
+
+type DragDropPayload = Parameters<
+  Parameters<ReturnType<typeof getCurrentWebview>["onDragDropEvent"]>[0]
+>[0]["payload"];
+
+/** Tauri reports physical pixels; the DOM works in CSS pixels. */
+function cssPosition(position: { x: number; y: number }): { x: number; y: number } {
+  const scale = window.devicePixelRatio || 1;
+  return { x: position.x / scale, y: position.y / scale };
+}
+
+/** The Rust side rejects `exists: <path>` for a refused overwrite; make that a typed error. */
+function asTyped(error: unknown): Error {
+  const text = error instanceof Error ? error.message : String(error);
+  if (text.startsWith("exists: ")) return new FileExistsError(text.slice("exists: ".length));
+  return error instanceof Error ? error : new Error(text);
+}
 
 /** Rust commands reject with a plain string; surface it as a proper Error. */
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -34,6 +55,59 @@ export class TauriPlatform implements Platform {
 
   writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }> {
     return call<{ modifiedMs: number }>("write_file", { path, text, format });
+  }
+
+  async writeBinaryFile(
+    path: string,
+    bytes: Uint8Array,
+    options: { overwrite: boolean },
+  ): Promise<void> {
+    // The bytes are the raw request body (no JSON, no base64). Headers must be ASCII, so the
+    // path is percent-encoded; Rust decodes it.
+    try {
+      await invoke<void>("write_binary_file", bytes, {
+        headers: {
+          "x-path": encodeURIComponent(path),
+          "x-overwrite": options.overwrite ? "1" : "0",
+        },
+      });
+    } catch (error) {
+      throw asTyped(error);
+    }
+  }
+
+  async copyFile(from: string, to: string, options: { overwrite: boolean }): Promise<void> {
+    try {
+      await invoke<void>("copy_file", { from, to, overwrite: options.overwrite });
+    } catch (error) {
+      throw asTyped(error);
+    }
+  }
+
+  async fileExists(path: string): Promise<boolean> {
+    return (await this.statFile(path)) !== null;
+  }
+
+  onFilesDropped(handler: (event: FilesDroppedEvent) => void): Promise<() => void> {
+    return this.onDragDrop((payload) => {
+      if (payload.type === "drop" && payload.paths.length > 0) {
+        handler({ paths: payload.paths, ...cssPosition(payload.position) });
+      }
+    });
+  }
+
+  onFileDragOver(handler: (position: FileDragPosition) => void): Promise<() => void> {
+    return this.onDragDrop((payload) => {
+      if (payload.type === "enter" || payload.type === "over") {
+        handler(cssPosition(payload.position));
+      } else {
+        handler(null);
+      }
+    });
+  }
+
+  private onDragDrop(handler: (payload: DragDropPayload) => void): Promise<() => void> {
+    return getCurrentWebview().onDragDropEvent((event) => handler(event.payload));
   }
 
   async showOpenDialog(options: { filters: FileFilter[]; multiple: boolean }): Promise<string[]> {
