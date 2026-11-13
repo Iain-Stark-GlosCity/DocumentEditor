@@ -23,6 +23,7 @@ import { tableMenu } from "./table-menu";
 import { tabs } from "./tabs";
 import { theme } from "./theme";
 import { uiCommands } from "./ui-commands";
+import { viewMode } from "./view-mode";
 import { windowTitle } from "./window-title";
 import { wordCount } from "./word-count";
 
@@ -50,4 +51,5 @@ export const defaultFeatures: readonly Feature[] = [
   wordCount,
   tableMenu,
   images,
+  viewMode,
 ];

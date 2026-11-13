@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { TextFormatProvider } from "../../core/format";
 import { markdownImage, markdownLink } from "./images";
+import { liveCommands, markdownViewExtensions } from "./live";
 import { outlineFromState } from "./outline";
 import { tableCommands, tableExtensions } from "./tables";
 
@@ -22,12 +23,13 @@ export const markdownProvider: TextFormatProvider = {
   id: "markdown",
   name: "Markdown",
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
-  viewModes: ["source", "split"],
-  commands: [...tableCommands],
+  viewModes: ["source", "live", "split"],
+  commands: [...liveCommands, ...tableCommands],
   imageSyntax: markdownImage,
   linkSyntax: markdownLink,
   editorExtensions: (context) => [
     markdown({ base: markdownLanguage }),
+    ...markdownViewExtensions(context),
     ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
   ],
   async render(text, context) {
