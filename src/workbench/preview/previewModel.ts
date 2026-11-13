@@ -103,7 +103,10 @@ export class PreviewModel {
   private providerSettings(providerId: string): Record<string, boolean | number | string> {
     const settings: Record<string, boolean | number | string> = {};
     for (const key of Object.keys(SETTINGS_SCHEMA) as SettingKey[]) {
-      if (key.startsWith(`${providerId}.`)) settings[key] = this.workbench.settings.get(key);
+      if (!key.startsWith(`${providerId}.`)) continue;
+      const value = this.workbench.settings.get(key);
+      // Only plain values cross to the render worker; structured settings are not for renderers.
+      if (typeof value !== "object") settings[key] = value;
     }
     return settings;
   }

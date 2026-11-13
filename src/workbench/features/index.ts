@@ -13,6 +13,7 @@ import { fileCommands } from "./file-commands";
 import { outline } from "./outline";
 import { paneFocus } from "./pane-focus";
 import { recovery } from "./recovery";
+import { formatMenu } from "./format-menu";
 import { help } from "./help";
 import { images } from "./images";
 import { preview } from "./preview";
@@ -30,6 +31,7 @@ import { wordCount } from "./word-count";
 export const defaultFeatures: readonly Feature[] = [
   fileCommands,
   editCommands,
+  formatMenu,
   editorAppearance,
   find,
   theme,

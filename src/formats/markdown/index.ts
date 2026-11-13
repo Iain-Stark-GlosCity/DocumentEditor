@@ -1,5 +1,6 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { TextFormatProvider } from "../../core/format";
+import { markdownEditing, markdownFormatCommands } from "./editing";
 import { markdownImage, markdownLink } from "./images";
 import { liveCommands, markdownViewExtensions } from "./live";
 import { outlineFromState } from "./outline";
@@ -24,13 +25,17 @@ export const markdownProvider: TextFormatProvider = {
   name: "Markdown",
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
   viewModes: ["source", "live", "split"],
-  commands: [...liveCommands, ...tableCommands],
+  commands: [...markdownFormatCommands, ...liveCommands, ...tableCommands],
   imageSyntax: markdownImage,
   linkSyntax: markdownLink,
   editorExtensions: (context) => [
-    markdown({ base: markdownLanguage }),
+    // Enter, Backspace and URL paste are handled by `markdownEditing` so that each has a
+    // settings switch.
+    markdown({ base: markdownLanguage, addKeymap: false, pasteURLAsLink: false }),
     ...markdownViewExtensions(context),
+    // Tables bind Tab and Enter at high precedence and decline outside a table.
     ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
+    markdownEditing(context.setting),
   ],
   async render(text, context) {
     return (await loadPipeline()).renderMarkdown(text, context);
