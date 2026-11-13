@@ -1,9 +1,8 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { TextFormatProvider } from "../../core/format";
+import { markdownImage, markdownLink } from "./images";
 import { outlineFromState } from "./outline";
 import { tableCommands, tableExtensions } from "./tables";
-import type { OutlineItem, TextFormatProvider } from "../../core/format";
-import { markdownImage, markdownLink } from "./images";
 
 /**
  * The unified pipeline is large, so it is loaded when a render is first requested (CLAUDE.md
@@ -24,20 +23,13 @@ export const markdownProvider: TextFormatProvider = {
   name: "Markdown",
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
   viewModes: ["source", "split"],
-  editorExtensions: () => [markdown({ base: markdownLanguage })],
   commands: [...tableCommands],
-  editorExtensions: (context) => {
   imageSyntax: markdownImage,
   linkSyntax: markdownLink,
-  editorExtensions: () => {
-    // Opening a Markdown document starts loading the pipeline in the background, so that the
-    // synchronous `outline` below has it ready by the time the outline panel asks.
-    void loadPipeline();
-    return [
-      markdown({ base: markdownLanguage }),
-      ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
-    ];
-  },
+  editorExtensions: (context) => [
+    markdown({ base: markdownLanguage }),
+    ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
+  ],
   async render(text, context) {
     return (await loadPipeline()).renderMarkdown(text, context);
   },

@@ -51,6 +51,8 @@ function paneSizes(): SettingDef<Readonly<Record<string, number>>> {
         (n) => typeof n === "number" && Number.isFinite(n) && n > 0 && n < 100,
       ),
   };
+}
+
 /** Any string. */
 export function str(fallback: string): SettingDef<string> {
   return { default: fallback, validate: (v): v is string => typeof v === "string" };
