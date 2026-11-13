@@ -79,6 +79,11 @@ export class MemoryPlatform implements Platform {
     return { text: file.text, format: { ...file.format }, modifiedMs: file.modifiedMs };
   }
 
+  async statFile(path: string): Promise<{ modifiedMs: number } | null> {
+    const file = this.files.get(path);
+    return file ? { modifiedMs: file.modifiedMs } : null;
+  }
+
   async writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }> {
     const modifiedMs = this.tick();
     this.files.set(path, { text, format: { ...format }, modifiedMs });

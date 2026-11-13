@@ -62,6 +62,8 @@ export function isExternalUrl(url: string): boolean {
 
 export interface Platform {
   readFile(path: string): Promise<FileData>;
+  /** The file's modified time without reading it, or null if it does not exist. */
+  statFile(path: string): Promise<{ modifiedMs: number } | null>;
   /** Atomic: writes a temporary file beside the target, then renames over it. */
   writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }>;
 

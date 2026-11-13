@@ -330,6 +330,21 @@ describe("watching", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  it("does not read the file when its modified time is unchanged", async () => {
+    vi.useFakeTimers();
+    const { platform } = await boot({
+      features: feature,
+      files: { "/a.md": "one" },
+      open: ["/a.md"],
+    });
+    const read = vi.spyOn(platform, "readFile");
+    const stat = vi.spyOn(platform, "statFile");
+    platform.triggerFileChange("/a.md");
+    await settle(SETTLE);
+    expect(stat).toHaveBeenCalledWith("/a.md");
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("starts for documents opened later", async () => {
     vi.useFakeTimers();
     const { platform, workbench } = await boot({ features: feature, files: { "/a.md": "one" } });

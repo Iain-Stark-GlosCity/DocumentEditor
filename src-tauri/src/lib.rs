@@ -2,6 +2,7 @@ pub mod assets;
 pub mod atomic;
 pub mod commands;
 pub mod textfile;
+pub mod watch;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -63,6 +64,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
+            commands::stat_file,
             commands::watch_file,
             commands::unwatch_file,
             commands::write_recovery,
