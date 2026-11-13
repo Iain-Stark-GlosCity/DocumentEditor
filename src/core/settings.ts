@@ -39,6 +39,11 @@ export function num(
   };
 }
 
+/** Any string. */
+export function str(fallback: string): SettingDef<string> {
+  return { default: fallback, validate: (v): v is string => typeof v === "string" };
+}
+
 export const SETTINGS_SCHEMA = {
   "appearance.theme": oneOf(["system", "light", "dark"], "system"),
   "editor.fontSize": num(14, 8, 40),
@@ -50,6 +55,10 @@ export const SETTINGS_SCHEMA = {
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),
   "files.autoSaveDelayMs": num(1500, 100, 600_000, true),
   "files.recoveryIntervalMs": num(3000, 100, 600_000, true),
+  /** Where inserted images go, relative to the document: `assets`, `.`, `${documentName}.assets`. */
+  "markdown.images.folder": str("assets"),
+  /** Pasted images larger than this many MB trigger a notice. 0 turns the notice off. */
+  "markdown.images.warnAboveMb": num(10, 0, 1000),
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

@@ -60,6 +60,7 @@ describe("menu bar", () => {
       "Select next occurrenceCtrl+D",
       "Select all occurrencesCtrl+Shift+L",
       "Go to lineCtrl+G",
+      "Insert image…",
     ]);
     expect(textsOf("View")).toEqual([
       "Toggle word wrapAlt+Z",

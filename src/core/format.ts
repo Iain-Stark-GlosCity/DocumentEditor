@@ -43,6 +43,15 @@ export interface TextFormatProvider {
 
   /** Export targets (HTML, PDF and so on). */
   readonly exporters?: readonly Exporter[];
+
+  /**
+   * How a document of this format shows an image. `path` is relative to the document, POSIX-style
+   * (`./assets/a.png`), unescaped; the provider applies whatever escaping its syntax needs.
+   * Declaring this is what lets the workbench paste, drop and insert images into the format.
+   */
+  imageSyntax?(path: string, alt: string): string;
+  /** How a document of this format links to another file. Same `path` rules as `imageSyntax`. */
+  linkSyntax?(path: string, text: string): string;
 }
 
 export interface EditorContext {

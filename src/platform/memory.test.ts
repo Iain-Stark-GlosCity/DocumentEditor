@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemoryPlatform } from "./memory";
-import type { FileFormat } from "./platform";
+import { FileExistsError, type FileFormat } from "./platform";
 
 const utf16: FileFormat = { encoding: "utf-16le", bom: true, eol: "lf", mixedEol: false };
 
@@ -114,5 +114,47 @@ describe("MemoryPlatform links and assets", () => {
     const platform = new MemoryPlatform();
     expect(platform.assetUrl("C:\\a b\\x.png")).not.toBe(platform.assetUrl("C:\\a b\\y.png"));
     expect(platform.assetUrl("C:\\a b\\x.png")).toContain(encodeURIComponent("C:\\a b\\x.png"));
+  });
+
+  it("writes binary files, refusing to overwrite unless asked", async () => {
+    const p = new MemoryPlatform();
+    await p.writeBinaryFile("/d/assets/a.png", new Uint8Array([1, 2]), { overwrite: false });
+    expect(await p.fileExists("/d/assets/a.png")).toBe(true);
+    await expect(
+      p.writeBinaryFile("/d/assets/a.png", new Uint8Array([3]), { overwrite: false }),
+    ).rejects.toBeInstanceOf(FileExistsError);
+    expect([...(p.binaryFiles.get("/d/assets/a.png") ?? [])]).toEqual([1, 2]);
+    await p.writeBinaryFile("/d/assets/a.png", new Uint8Array([3]), { overwrite: true });
+    expect([...(p.binaryFiles.get("/d/assets/a.png") ?? [])]).toEqual([3]);
+  });
+
+  it("copies files with the same rules", async () => {
+    const p = new MemoryPlatform();
+    p.seedBinary("/x/a.png", [7]);
+    await p.copyFile("/x/a.png", "/d/a.png", { overwrite: false });
+    await expect(p.copyFile("/x/a.png", "/d/a.png", { overwrite: false })).rejects.toBeInstanceOf(
+      FileExistsError,
+    );
+    await expect(p.copyFile("/x/none.png", "/d/b.png", { overwrite: false })).rejects.toThrow(
+      /not found/,
+    );
+    expect([...(p.binaryFiles.get("/d/a.png") ?? [])]).toEqual([7]);
+  });
+
+  it("delivers simulated drops and drags until unsubscribed", async () => {
+    const p = new MemoryPlatform();
+    const drops = vi.fn();
+    const drags = vi.fn();
+    const offDrop = await p.onFilesDropped(drops);
+    const offDrag = await p.onFileDragOver(drags);
+    p.dropFiles(["/a.png"], 3, 4);
+    p.dragFilesOver({ x: 1, y: 2 });
+    p.dragFilesOver(null);
+    expect(drops).toHaveBeenCalledWith({ paths: ["/a.png"], x: 3, y: 4 });
+    expect(drags.mock.calls).toEqual([[{ x: 1, y: 2 }], [null]]);
+    offDrop();
+    offDrag();
+    p.dropFiles(["/b.png"]);
+    expect(drops).toHaveBeenCalledTimes(1);
   });
 });

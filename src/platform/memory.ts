@@ -2,7 +2,10 @@ import {
   DEFAULT_FILE_FORMAT,
   type FileChange,
   type FileData,
+  type FileDragPosition,
+  FileExistsError,
   type FileFilter,
+  type FilesDroppedEvent,
   type FileFormat,
   isExternalUrl,
   type Platform,
@@ -34,6 +37,8 @@ export class MemoryPlatform implements Platform {
   private readonly openHandlers = new Set<(paths: string[]) => void>();
   private pendingOpenRequests: string[] = [];
   private closeHandler: (() => Promise<boolean>) | null = null;
+  private readonly dropHandlers = new Set<(event: FilesDroppedEvent) => void>();
+  private readonly dragHandlers = new Set<(position: FileDragPosition) => void>();
   private lastModified = 0;
 
   // Test helpers ------------------------------------------------------------------------
@@ -71,6 +76,26 @@ export class MemoryPlatform implements Platform {
     return this.closeHandler ? this.closeHandler() : true;
   }
 
+  /** Bytes of binary files written with `writeBinaryFile` or `copyFile`, by path. */
+  readonly binaryFiles = new Map<string, Uint8Array>();
+  /** Set to make the next binary write or copy reject with this error (then clears). */
+  failNextBinaryWrite: Error | null = null;
+
+  /** Puts a binary file on the fake disk (for example an image to be dropped). */
+  seedBinary(path: string, bytes: Uint8Array | number[] = [1, 2, 3]): void {
+    this.binaryFiles.set(path, Uint8Array.from(bytes));
+  }
+
+  /** Simulates files dropped from Explorer at CSS-pixel position (x, y). */
+  dropFiles(paths: string[], x = 0, y = 0): void {
+    for (const handler of [...this.dropHandlers]) handler({ paths, x, y });
+  }
+
+  /** Simulates an Explorer drag over the window; pass null for the drag leaving. */
+  dragFilesOver(position: FileDragPosition): void {
+    for (const handler of [...this.dragHandlers]) handler(position);
+  }
+
   // Platform ----------------------------------------------------------------------------
 
   async readFile(path: string): Promise<FileData> {
@@ -88,6 +113,47 @@ export class MemoryPlatform implements Platform {
     const modifiedMs = this.tick();
     this.files.set(path, { text, format: { ...format }, modifiedMs });
     return { modifiedMs };
+  }
+
+  async writeBinaryFile(
+    path: string,
+    bytes: Uint8Array,
+    options: { overwrite: boolean },
+  ): Promise<void> {
+    this.takeBinaryFailure();
+    if (!options.overwrite && (await this.fileExists(path))) throw new FileExistsError(path);
+    this.binaryFiles.set(path, Uint8Array.from(bytes));
+  }
+
+  async copyFile(from: string, to: string, options: { overwrite: boolean }): Promise<void> {
+    this.takeBinaryFailure();
+    if (from === to) return;
+    const source = this.binaryFiles.get(from);
+    const text = this.files.get(from);
+    if (!source && !text) throw new Error(`File not found: ${from}`);
+    if (!options.overwrite && (await this.fileExists(to))) throw new FileExistsError(to);
+    if (source) this.binaryFiles.set(to, Uint8Array.from(source));
+    else if (text) {
+      this.files.set(to, { ...text, format: { ...text.format }, modifiedMs: this.tick() });
+    }
+  }
+
+  async fileExists(path: string): Promise<boolean> {
+    return this.files.has(path) || this.binaryFiles.has(path);
+  }
+
+  async onFilesDropped(handler: (event: FilesDroppedEvent) => void): Promise<() => void> {
+    this.dropHandlers.add(handler);
+    return () => {
+      this.dropHandlers.delete(handler);
+    };
+  }
+
+  async onFileDragOver(handler: (position: FileDragPosition) => void): Promise<() => void> {
+    this.dragHandlers.add(handler);
+    return () => {
+      this.dragHandlers.delete(handler);
+    };
   }
 
   async showOpenDialog(options: { filters: FileFilter[]; multiple: boolean }): Promise<string[]> {
@@ -158,6 +224,12 @@ export class MemoryPlatform implements Platform {
 
   assetUrl(absolutePath: string): string {
     return `memory-asset://files/${encodeURIComponent(absolutePath)}`;
+  }
+
+  private takeBinaryFailure(): void {
+    const error = this.failNextBinaryWrite;
+    this.failNextBinaryWrite = null;
+    if (error) throw error;
   }
 
   /** Strictly increasing so tests can tell successive writes apart. */

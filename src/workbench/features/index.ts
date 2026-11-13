@@ -11,6 +11,7 @@ import { find } from "./find";
 import { fileCommands } from "./file-commands";
 import { recovery } from "./recovery";
 import { help } from "./help";
+import { images } from "./images";
 import { preview } from "./preview";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
@@ -35,4 +36,5 @@ export const defaultFeatures: readonly Feature[] = [
   autosave,
   recovery,
   preview,
+  images,
 ];

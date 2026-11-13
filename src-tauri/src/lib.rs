@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod atomic;
+pub mod binary;
 pub mod commands;
 pub mod textfile;
 pub mod watch;
@@ -65,6 +66,8 @@ pub fn run() {
             commands::read_file,
             commands::write_file,
             commands::stat_file,
+            commands::write_binary_file,
+            commands::copy_file,
             commands::watch_file,
             commands::unwatch_file,
             commands::write_recovery,
