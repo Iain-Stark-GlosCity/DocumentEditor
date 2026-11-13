@@ -6,14 +6,21 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, type Extension, type StateEffect } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  type Extension,
+  type StateEffect,
+  Transaction,
+} from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { CommandRegistry } from "../core/commands";
 import { createDocumentsStore, type DocumentsStore, type OpenDocument } from "../core/documents";
 import type { FormatRegistry } from "../core/registry";
 import { SettingsStore } from "../core/settings";
-import type { FileFilter, Platform } from "../platform/platform";
+import { minimalEdit } from "../core/text-diff";
+import type { FileData, FileFilter, Platform } from "../platform/platform";
 import { BufferStore } from "./buffers";
 import type { Feature, MenuItem } from "./feature";
 import { commandKeys, matchesKey } from "./keys";
@@ -75,6 +82,35 @@ export interface EditorUpdate {
   docId: string | null;
   state: EditorState | null;
   docChanged: boolean;
+}
+
+/** Outcome of `saveDocument`. */
+export type SaveResult =
+  { ok: true } | { ok: false; reason: "cancelled" | "blocked" | "error"; error?: string };
+
+export interface SaveOptions {
+  /** An automatic save: never asks, never shows a Save dialog, reports errors to the caller. */
+  auto?: boolean;
+}
+
+export interface SaveContext {
+  doc: OpenDocument;
+  /** Where the text is about to be written. Differs from `doc.path` for "Save as". */
+  path: string;
+  text: string;
+  /** False for automatic saves, which must not open a dialog. */
+  interactive: boolean;
+}
+
+/** Runs before a document is written. Resolve false to stop the save. */
+export type SaveGuard = (context: SaveContext) => boolean | Promise<boolean>;
+
+export interface SavedEvent {
+  docId: string;
+  path: string;
+  /** The path before the save: null for a first save, another path for "Save as". */
+  previousPath: string | null;
+  modifiedMs: number;
 }
 
 export interface WorkbenchOptions {
@@ -148,6 +184,14 @@ export class Workbench {
   private readonly activeEmitter = new Emitter<OpenDocument | null>();
   private readonly editorEmitter = new Emitter<EditorUpdate>();
   private readonly textEmitter = new Emitter<TextChange>();
+  private readonly openedEmitter = new Emitter<OpenDocument>();
+  private readonly closedEmitter = new Emitter<OpenDocument>();
+  private readonly savedEmitter = new Emitter<SavedEvent>();
+  private readonly saveGuards = new Set<SaveGuard>();
+  private readonly quitHooks = new Set<() => void | Promise<void>>();
+  private readonly saving = new Map<string, Promise<void>>();
+  private readonly autosaveHolds = new Map<string, Set<string>>();
+  private knownDocuments = new Map<string, OpenDocument>();
   private readonly opens = new Set<Promise<void>>();
   private nextId = 1;
   private settingsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -185,6 +229,7 @@ export class Workbench {
     this.stops = stops;
     const current = () => this.stops === stops;
 
+    this.knownDocuments = new Map(this.documents.getState().documents.map((d) => [d.id, d]));
     stops.push(this.documents.subscribe(() => this.onDocumentsChanged()));
     this.refreshDirty();
 
@@ -355,24 +400,90 @@ export class Workbench {
   replaceText(id: string, text: string): void {
     const state = this.getEditorState(id);
     if (!state || state.doc.toString() === text) return;
-    const changes = { from: 0, to: state.doc.length, insert: text };
-    if (this.view && this.shownId === id) {
-      this.view.dispatch({ changes });
-      return;
+    this.applyChange(id, state, { from: 0, to: state.doc.length, insert: text }, true);
+  }
+
+  /**
+   * Makes a document match what is on disk without disturbing the editor: only the part of the
+   * text that differs is replaced, so the caret and scroll position survive, and the edit is
+   * not added to the undo history. The saved state is updated to match.
+   */
+  reloadFromDisk(id: string, data: FileData): void {
+    const state = this.getEditorState(id);
+    if (state) {
+      const edit = minimalEdit(state.doc.toString(), data.text);
+      if (edit) this.applyChange(id, state, edit, false);
     }
-    const next = state.update({ changes }).state;
-    this.buffers.set(id, next);
-    this.refreshDirty();
-    this.textEmitter.emit({ docId: id, state: next });
-    this.editorEmitter.emit({ docId: id, state: next, docChanged: true });
+    this.documents.getState().applyDisk(id, data);
   }
 
   isDirty(id: string): boolean {
     const doc = this.documents.getState().documents.find((d) => d.id === id);
+    if (doc?.missingOnDisk) return true;
     const state = this.buffers.get(id);
     if (!doc || !state) return false;
     if (state.doc.length !== doc.savedText.length) return true;
     return state.doc.toString() !== doc.savedText;
+  }
+
+  /** Calls back after a document appears in the store (opened, restored or new). */
+  onDidOpenDocument(callback: (doc: OpenDocument) => void): Unsubscribe {
+    return this.openedEmitter.on(callback);
+  }
+
+  /** Calls back after a document has been removed, with the document as it last was. */
+  onDidCloseDocument(callback: (doc: OpenDocument) => void): Unsubscribe {
+    return this.closedEmitter.on(callback);
+  }
+
+  /** Calls back after a successful write of a document (manual or automatic). */
+  onDidSave(callback: (event: SavedEvent) => void): Unsubscribe {
+    return this.savedEmitter.on(callback);
+  }
+
+  /** Adds a check that runs before every write. Any guard resolving false stops the save. */
+  addSaveGuard(guard: SaveGuard): Unsubscribe {
+    this.saveGuards.add(guard);
+    return () => {
+      this.saveGuards.delete(guard);
+    };
+  }
+
+  /** Runs once the user has agreed to quit (or nothing is unsaved), before the window closes. */
+  onBeforeQuit(hook: () => void | Promise<void>): Unsubscribe {
+    this.quitHooks.add(hook);
+    return () => {
+      this.quitHooks.delete(hook);
+    };
+  }
+
+  /**
+   * Asks automatic saving to leave a document alone (for example while a conflict with the file
+   * on disk is unresolved). Holds are per reason; call the returned function to release it.
+   */
+  holdAutosave(docId: string, reason: string): Unsubscribe {
+    let reasons = this.autosaveHolds.get(docId);
+    if (!reasons) this.autosaveHolds.set(docId, (reasons = new Set()));
+    reasons.add(reason);
+    return () => {
+      const held = this.autosaveHolds.get(docId);
+      held?.delete(reason);
+      if (held?.size === 0) this.autosaveHolds.delete(docId);
+    };
+  }
+
+  isAutosaveHeld(docId: string): boolean {
+    return (this.autosaveHolds.get(docId)?.size ?? 0) > 0;
+  }
+
+  /** True while the document's bytes are being written. */
+  isSaving(docId: string): boolean {
+    return this.saving.has(docId);
+  }
+
+  /** Resolves when no write of the document is in flight. */
+  async whenSaveSettled(docId: string): Promise<void> {
+    while (this.saving.has(docId)) await this.saving.get(docId);
   }
 
   /** Called by the editor component once its view exists. Returns a function to detach it. */
@@ -470,22 +581,41 @@ export class Workbench {
   }
 
   async save(id: string | null = this.documents.getState().activeId): Promise<boolean> {
-    const doc = this.docById(id);
-    const text = doc && this.getText(doc.id);
-    if (!doc || text === undefined) return false;
-    if (doc.path === null) return this.saveAs(doc.id);
-    return this.writeTo(doc, doc.path, text);
+    return (await this.saveDocument(id)).ok;
   }
 
   async saveAs(id: string | null = this.documents.getState().activeId): Promise<boolean> {
+    return (await this.saveAsNow(id)).ok;
+  }
+
+  /**
+   * Saves a document and says how it went. With `auto`, an untitled document is never saved (no
+   * dialog), guards may not ask questions, and a write error is returned rather than shown.
+   */
+  async saveDocument(
+    id: string | null = this.documents.getState().activeId,
+    options: SaveOptions = {},
+  ): Promise<SaveResult> {
     const doc = this.docById(id);
     const text = doc && this.getText(doc.id);
-    if (!doc || text === undefined) return false;
+    if (!doc || text === undefined)
+      return { ok: false, reason: "error", error: "No such document" };
+    if (doc.path === null) {
+      return options.auto ? { ok: false, reason: "blocked" } : this.saveAsNow(doc.id);
+    }
+    return this.writeTo(doc, doc.path, text, options.auto === true);
+  }
+
+  private async saveAsNow(id: string | null): Promise<SaveResult> {
+    const doc = this.docById(id);
+    const text = doc && this.getText(doc.id);
+    if (!doc || text === undefined)
+      return { ok: false, reason: "error", error: "No such document" };
     const ext = this.registry.byId(doc.providerId)?.fileExtensions[0];
     const defaultPath = doc.path ?? (ext ? `${doc.title}.${ext}` : doc.title);
     const path = await this.platform.showSaveDialog({ filters: this.fileFilters(), defaultPath });
-    if (path === null) return false;
-    return this.writeTo(doc, path, text);
+    if (path === null) return { ok: false, reason: "cancelled" };
+    return this.writeTo(doc, path, text, false);
   }
 
   /** Closes a document, asking first if it has unsaved changes. Returns false if cancelled. */
@@ -518,14 +648,41 @@ export class Workbench {
     return id === null ? undefined : this.documents.getState().documents.find((d) => d.id === id);
   }
 
-  private async writeTo(doc: OpenDocument, path: string, text: string): Promise<boolean> {
+  private async writeTo(
+    doc: OpenDocument,
+    path: string,
+    text: string,
+    auto: boolean,
+  ): Promise<SaveResult> {
     try {
-      const { modifiedMs } = await this.platform.writeFile(path, text, doc.format);
-      this.documents.getState().markSaved(doc.id, path, text, modifiedMs);
-      return true;
+      for (const guard of [...this.saveGuards]) {
+        if (!(await guard({ doc, path, text, interactive: !auto }))) {
+          return { ok: false, reason: "blocked" };
+        }
+      }
+      const write = (async () => {
+        const { modifiedMs } = await this.platform.writeFile(path, text, doc.format);
+        // Saving normalises line endings to the dominant style, so the file is no longer mixed.
+        this.documents
+          .getState()
+          .markSaved(doc.id, path, text, modifiedMs, { ...doc.format, mixedEol: false });
+        this.savedEmitter.emit({ docId: doc.id, path, previousPath: doc.path, modifiedMs });
+      })();
+      const settled = write.then(
+        () => undefined,
+        () => undefined,
+      );
+      this.saving.set(doc.id, settled);
+      try {
+        await write;
+      } finally {
+        if (this.saving.get(doc.id) === settled) this.saving.delete(doc.id);
+      }
+      return { ok: true };
     } catch (e) {
-      this.notify({ kind: "error", message: `Could not save ${path}: ${message(e)}` });
-      return false;
+      const error = message(e);
+      if (!auto) this.notify({ kind: "error", message: `Could not save ${path}: ${error}` });
+      return { ok: false, reason: "error", error };
     }
   }
 
@@ -551,6 +708,18 @@ export class Workbench {
   }
 
   private async confirmQuit(): Promise<boolean> {
+    if (!(await this.confirmUnsavedOnQuit())) return false;
+    for (const hook of [...this.quitHooks]) {
+      try {
+        await hook();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return true;
+  }
+
+  private async confirmUnsavedOnQuit(): Promise<boolean> {
     const unsaved = this.documents.getState().documents.filter((d) => this.isDirty(d.id));
     if (unsaved.length === 0) return true;
     const names = unsaved.map((d) => d.title).join(", ");
@@ -655,6 +824,33 @@ export class Workbench {
     }
     this.refreshDirty();
     if (activeId !== this.shownId) this.showActive();
+
+    const current = new Map(documents.map((d) => [d.id, d]));
+    const opened = documents.filter((d) => !this.knownDocuments.has(d.id));
+    const closed = [...this.knownDocuments.values()].filter((d) => !current.has(d.id));
+    this.knownDocuments = current;
+    for (const doc of closed) this.autosaveHolds.delete(doc.id);
+    for (const doc of opened) this.openedEmitter.emit(doc);
+    for (const doc of closed) this.closedEmitter.emit(doc);
+  }
+
+  /** Applies one change to a document's state, whether or not it is the one being shown. */
+  private applyChange(
+    id: string,
+    state: EditorState,
+    changes: { from: number; to: number; insert: string },
+    addToHistory: boolean,
+  ): void {
+    const annotations = addToHistory ? [] : [Transaction.addToHistory.of(false)];
+    if (this.view && this.shownId === id) {
+      this.view.dispatch({ changes, annotations });
+      return;
+    }
+    const next = state.update({ changes, annotations }).state;
+    this.buffers.set(id, next);
+    this.refreshDirty();
+    this.textEmitter.emit({ docId: id, state: next });
+    this.editorEmitter.emit({ docId: id, state: next, docChanged: true });
   }
 
   private refreshDirty(): void {

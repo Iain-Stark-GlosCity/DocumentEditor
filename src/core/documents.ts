@@ -13,6 +13,8 @@ export interface OpenDocument {
   modifiedMs: number;
   /** File name, or `Untitled-n`. */
   title: string;
+  /** The file was deleted or moved outside the app. The document counts as unsaved until saved. */
+  missingOnDisk?: boolean;
 }
 
 /**
@@ -26,7 +28,11 @@ export interface DocumentsState {
   openUntitled(providerId: string): string;
   /** Returns the id of the document, which is an existing one if the path is already open. */
   openFromFile(path: string, data: FileData, providerId: string): string;
-  markSaved(id: string, path: string, text: string, modifiedMs: number): void;
+  /** `format`, when given, replaces the document's FileFormat (for example to clear `mixedEol`). */
+  markSaved(id: string, path: string, text: string, modifiedMs: number, format?: FileFormat): void;
+  /** Adopts what is on disk as the saved state (after a reload, or when it matches the buffer). */
+  applyDisk(id: string, data: FileData): void;
+  setMissing(id: string, missing: boolean): void;
   close(id: string): void;
   setActive(id: string): void;
 }
@@ -87,10 +93,46 @@ export function createDocumentsStore(): DocumentsStore {
       return id;
     },
 
-    markSaved(id, path, text, modifiedMs) {
+    markSaved(id, path, text, modifiedMs, format) {
       set((s) => ({
         documents: s.documents.map((d) =>
-          d.id === id ? { ...d, path, savedText: text, modifiedMs, title: baseName(path) } : d,
+          d.id === id
+            ? {
+                ...d,
+                path,
+                savedText: text,
+                modifiedMs,
+                title: baseName(path),
+                format: format ?? d.format,
+                missingOnDisk: false,
+              }
+            : d,
+        ),
+      }));
+    },
+
+    applyDisk(id, data) {
+      set((s) => ({
+        documents: s.documents.map((d) =>
+          d.id === id
+            ? {
+                ...d,
+                savedText: data.text,
+                modifiedMs: data.modifiedMs,
+                format: data.format,
+                missingOnDisk: false,
+              }
+            : d,
+        ),
+      }));
+    },
+
+    setMissing(id, missing) {
+      set((s) => ({
+        documents: s.documents.map((d) =>
+          d.id === id && (d.missingOnDisk ?? false) !== missing
+            ? { ...d, missingOnDisk: missing }
+            : d,
         ),
       }));
     },
