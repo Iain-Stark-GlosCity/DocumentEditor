@@ -21,6 +21,7 @@ import { SettingsStore } from "../core/settings";
 import { minimalEdit } from "../core/text-diff";
 import type { FileData, FileFilter, Platform } from "../platform/platform";
 import { BufferStore } from "./buffers";
+import { documentAssetUrl, followDocumentLink } from "./editor-links";
 import type { Feature, MenuItem } from "./feature";
 import { commandKeys, matchesKey } from "./keys";
 
@@ -891,6 +892,9 @@ export class Workbench {
       mode,
       path: doc.path,
       setting: (key, fallback) => this.settings.getOr(key, fallback),
+      // The path is read when used, so links and images follow a "Save as".
+      openLink: (href) => followDocumentLink(this, href, this.docById(doc.id)?.path ?? null),
+      resolveAsset: (rel) => documentAssetUrl(this, rel, this.docById(doc.id)?.path ?? null),
     });
   }
 

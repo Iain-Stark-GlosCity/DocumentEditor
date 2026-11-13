@@ -1,5 +1,6 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { OutlineItem, TextFormatProvider } from "../../core/format";
+import { liveCommands, markdownViewExtensions } from "./live";
 
 /**
  * The unified pipeline is large, so it is loaded on first use (CLAUDE.md rule 6) and never
@@ -20,12 +21,13 @@ export const markdownProvider: TextFormatProvider = {
   id: "markdown",
   name: "Markdown",
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
-  viewModes: ["source", "split"],
-  editorExtensions: () => {
+  viewModes: ["source", "live", "split"],
+  commands: [...liveCommands],
+  editorExtensions: (context) => {
     // Opening a Markdown document starts loading the pipeline in the background, so that the
     // synchronous `outline` below has it ready by the time the outline panel asks.
     void loadPipeline();
-    return [markdown({ base: markdownLanguage })];
+    return [markdown({ base: markdownLanguage }), ...markdownViewExtensions(context)];
   },
   async render(text, context) {
     return (await loadPipeline()).renderMarkdown(text, context);

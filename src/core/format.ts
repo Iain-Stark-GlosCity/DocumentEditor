@@ -51,6 +51,10 @@ export interface EditorContext {
   path: string | null;
   /** Read a setting by key, with the provider's own default. */
   setting<T>(key: string, fallback: T): T;
+  /** Follows a link target written in the document (URL or relative path). Optional. */
+  openLink?(href: string): void;
+  /** URL the webview can load for an image path relative to the document; "" if none. */
+  resolveAsset?(relativePath: string): string;
 }
 
 export interface RenderContext {

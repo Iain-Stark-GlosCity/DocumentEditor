@@ -17,6 +17,7 @@ import { statusFormat } from "./status-format";
 import { tabs } from "./tabs";
 import { theme } from "./theme";
 import { uiCommands } from "./ui-commands";
+import { viewMode } from "./view-mode";
 import { windowTitle } from "./window-title";
 
 export const defaultFeatures: readonly Feature[] = [
@@ -35,4 +36,5 @@ export const defaultFeatures: readonly Feature[] = [
   autosave,
   recovery,
   preview,
+  viewMode,
 ];
