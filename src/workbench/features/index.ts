@@ -8,7 +8,10 @@ import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
 import { externalChanges } from "./external-changes";
 import { find } from "./find";
+import { focusMode } from "./focus-mode";
 import { fileCommands } from "./file-commands";
+import { outline } from "./outline";
+import { paneFocus } from "./pane-focus";
 import { recovery } from "./recovery";
 import { help } from "./help";
 import { preview } from "./preview";
@@ -36,6 +39,10 @@ export const defaultFeatures: readonly Feature[] = [
   externalChanges,
   autosave,
   recovery,
+  focusMode,
+  outline,
+  // Before `preview`: its F6 command supersedes the preview's (see pane-focus.ts).
+  paneFocus,
   preview,
   spellcheck,
   wordCount,

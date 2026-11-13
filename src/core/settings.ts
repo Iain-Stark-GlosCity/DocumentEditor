@@ -39,6 +39,20 @@ export function num(
   };
 }
 
+/** Side pane widths by pane id, as percentages of the editor area. */
+function paneSizes(): SettingDef<Readonly<Record<string, number>>> {
+  return {
+    default: Object.freeze({}),
+    validate: (v): v is Readonly<Record<string, number>> =>
+      typeof v === "object" &&
+      v !== null &&
+      !Array.isArray(v) &&
+      Object.values(v).every(
+        (n) => typeof n === "number" && Number.isFinite(n) && n > 0 && n < 100,
+      ),
+  };
+}
+
 export const SETTINGS_SCHEMA = {
   "appearance.theme": oneOf(["system", "light", "dark"], "system"),
   "editor.fontSize": num(14, 8, 40),
@@ -47,6 +61,12 @@ export const SETTINGS_SCHEMA = {
   "editor.viewMode": oneOf(["source", "live", "split"], "source"),
   "editor.spellcheck": bool(true),
   "statusBar.wordCount": bool(true),
+  "editor.typewriterMode": bool(false),
+  "editor.focusMode": bool(false),
+  /** In characters; 0 means the text uses the full width. */
+  "editor.maxLineWidth": num(0, 0, 400, true),
+  "outline.visible": bool(false),
+  "ui.paneSizes": paneSizes(),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),

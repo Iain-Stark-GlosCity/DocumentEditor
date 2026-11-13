@@ -5,7 +5,7 @@
  * matches a file and uses only what is declared here. Adding a format means adding a folder
  * under `src/formats/` that exports one of these.
  */
-import type { Extension } from "@codemirror/state";
+import type { EditorState, Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 
 /** How the editor presents the buffer. Providers declare which modes they support. */
@@ -35,8 +35,12 @@ export interface TextFormatProvider {
   /** Render the text for the preview pane. Omit if the format has no preview. */
   render?(text: string, context: RenderContext): Promise<RenderResult>;
 
-  /** Headings or equivalent structure for the outline panel. */
-  outline?(text: string): OutlineItem[];
+  /**
+   * Headings or equivalent structure for the outline panel, read from the editor's own state
+   * (its syntax tree) rather than by re-parsing the text. Synchronous and cheap: it must never
+   * block on a slow parse, so with an unfinished tree it returns what the tree has so far.
+   */
+  outline?(state: EditorState): OutlineItem[];
 
   /** Commands contributed by the format (bold, insert table and so on). */
   readonly commands?: readonly FormatCommand[];

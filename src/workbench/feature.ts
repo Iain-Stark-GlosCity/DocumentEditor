@@ -47,6 +47,8 @@ export interface SidePane {
   id: string;
   /** Accessible name of the pane. */
   title: string;
+  /** Which side of the editor the pane docks to. Default `right`. */
+  side?: "left" | "right";
   /** Initial width as a percentage of the editor area. Default 40. */
   defaultSize?: number;
   /**
@@ -75,6 +77,11 @@ export interface Feature {
   statusItems?: readonly StatusItem[];
   menuItems?: readonly MenuItem[];
   sidePane?: SidePane;
+  /**
+   * Components rendered once at the end of the app, for modal pickers and the like. Each decides
+   * for itself whether to show anything.
+   */
+  overlays?: readonly ComponentType<FeatureComponentProps>[];
 
   /** Runs when the workbench starts. May return a function that undoes whatever it did. */
   activate?(workbench: Workbench): void | (() => void);

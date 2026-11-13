@@ -17,6 +17,7 @@ import { EditorArea } from "./SidePanes";
 import { StatusBar } from "./StatusBar";
 import { PANEL_ID, tabId, TabStrip } from "./TabStrip";
 import { Workbench } from "./workbench";
+import { useZenMode } from "./zen";
 
 export type AppProps =
   | {
@@ -51,32 +52,41 @@ export function App(props: AppProps) {
   const activeId = useStore(workbench.documents, (s) => s.activeId);
   const dirty = useStore(workbench.ui, (s) => s.dirty);
   const dialog = useStore(workbench.ui, (s) => s.dialogs[0] ?? null);
+  // Zen mode hides the chrome; the command palette and dialogs still work.
+  const zen = useZenMode(workbench);
 
   return (
-    <div className="app">
-      <MenuBar workbench={workbench} />
-      <TabStrip
-        documents={documents}
-        activeId={activeId}
-        dirty={dirty}
-        onSelect={(id) => workbench.documents.getState().setActive(id)}
-        onClose={(id) => void workbench.closeDocument(id)}
-      />
+    <div className={zen ? "app app--zen" : "app"}>
+      {!zen && <MenuBar workbench={workbench} />}
+      {!zen && (
+        <TabStrip
+          documents={documents}
+          activeId={activeId}
+          dirty={dirty}
+          onSelect={(id) => workbench.documents.getState().setActive(id)}
+          onClose={(id) => void workbench.closeDocument(id)}
+        />
+      )}
       <Notifications workbench={workbench} />
       <main
         id={PANEL_ID}
         className="editor-panel"
         role="tabpanel"
-        aria-labelledby={activeId ? tabId(activeId) : undefined}
-        aria-label={activeId ? undefined : "Editor"}
+        aria-labelledby={activeId && !zen ? tabId(activeId) : undefined}
+        aria-label={activeId && !zen ? undefined : "Editor"}
       >
         <EditorArea workbench={workbench}>
           {documents.length === 0 && <EmptyState workbench={workbench} />}
           <EditorPane workbench={workbench} hidden={documents.length === 0} />
         </EditorArea>
       </main>
-      <StatusBar workbench={workbench} />
+      {!zen && <StatusBar workbench={workbench} />}
       <CommandPalette workbench={workbench} />
+      {workbench.features.flatMap((feature) =>
+        (feature.overlays ?? []).map((Overlay, i) => (
+          <Overlay key={`${feature.id}:${i}`} workbench={workbench} />
+        )),
+      )}
       {dialog && (
         <ConfirmDialog
           key={dialog.id}
