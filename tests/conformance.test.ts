@@ -14,6 +14,19 @@ import { normaliseHtml, parseSpec, type SpecExample } from "./spec-examples";
 
 const context = { path: null, resolveAsset: (p: string) => p };
 
+/**
+ * Our additions to the output (maths, Mermaid placeholders, highlighting, heading ids, GitHub's
+ * task-list classes) are not in the specs, so the spec runs switch them off. They are covered by
+ * the unit tests in `src/render`.
+ */
+const SPEC_ONLY = {
+  math: false,
+  mermaid: false,
+  highlight: false,
+  headingIds: false,
+  taskListClasses: false,
+} as const;
+
 /** CommonMark: plain parser, no extensions, no sanitising, no data-line. */
 const commonmark = createMarkdownProcessor({
   gfm: false,
@@ -21,6 +34,7 @@ const commonmark = createMarkdownProcessor({
   dataLines: false,
   resolveAssets: false,
   sanitise: false,
+  ...SPEC_ONLY,
 });
 
 /** GFM extension examples: GFM on, everything else off. */
@@ -30,6 +44,7 @@ const gfm = createMarkdownProcessor({
   dataLines: false,
   resolveAssets: false,
   sanitise: false,
+  ...SPEC_ONLY,
 });
 
 /** Build a number -> reason map from groups of example numbers. */
@@ -75,10 +90,6 @@ const COMMONMARK_KNOWN_FAILURES = known([
  * the rest of that file is the CommonMark spec again.
  */
 const GFM_KNOWN_FAILURES = known([
-  [
-    "task list items get `task-list-item` / `contains-task-list` classes (micromark's choice, the same as github.com)",
-    [279, 280],
-  ],
   ["extended autolinks: `ftp://` is not linked by remark-gfm", [628]],
   [
     "tagfilter is not implemented; the sanitiser removes those tags instead, which is stricter",

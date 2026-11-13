@@ -13,6 +13,23 @@
 
 const LINE_ATTRIBUTE = "data-line";
 
+/**
+ * The preview adds a few things to its own DOM after the pipeline's HTML is in (copy buttons on
+ * code blocks, for example). They carry this attribute, and the comparison below ignores them,
+ * so a block the reader has not changed is still "the same" and is not rebuilt.
+ */
+export const UI_ATTRIBUTE = "data-preview-ui";
+
+function isUi(node: Node): boolean {
+  return node.nodeType === Node.ELEMENT_NODE && (node as Element).hasAttribute(UI_ATTRIBUTE);
+}
+
+/** Child nodes, without the preview's own additions. */
+function contentChildren(node: Node): Node[] {
+  const all = Array.from(node.childNodes);
+  return all.some(isUi) ? all.filter((child) => !isUi(child)) : all;
+}
+
 /** Structural equality of two nodes, not counting `data-line` anywhere in the subtree. */
 export function sameIgnoringLines(a: Node, b: Node): boolean {
   if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) return false;
@@ -31,28 +48,41 @@ export function sameIgnoringLines(a: Node, b: Node): boolean {
     const other = y.attributes.length - (y.hasAttribute(LINE_ATTRIBUTE) ? 1 : 0);
     if (compared !== other) return false;
   }
-  if (a.childNodes.length !== b.childNodes.length) return false;
-  for (let i = 0; i < a.childNodes.length; i++) {
-    const left = a.childNodes[i];
-    const right = b.childNodes[i];
-    if (!left || !right || !sameIgnoringLines(left, right)) return false;
+  const left = contentChildren(a);
+  const right = contentChildren(b);
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    const x = left[i];
+    const y = right[i];
+    if (!x || !y || !sameIgnoringLines(x, y)) return false;
   }
   return true;
 }
 
 /** Copies `data-line` from `source` onto `target`, throughout two subtrees known to match. */
 function copyLines(target: Node, source: Node): void {
-  if (target.nodeType !== Node.ELEMENT_NODE) return;
+  if (target.nodeType !== Node.ELEMENT_NODE || source.nodeType !== Node.ELEMENT_NODE) return;
   const to = target as Element;
   const from = source as Element;
   const line = from.getAttribute(LINE_ATTRIBUTE);
   if (line === null) to.removeAttribute(LINE_ATTRIBUTE);
   else if (to.getAttribute(LINE_ATTRIBUTE) !== line) to.setAttribute(LINE_ATTRIBUTE, line);
-  for (let i = 0; i < to.childNodes.length; i++) {
-    const child = to.childNodes[i];
-    const sourceChild = from.childNodes[i];
+  const children = contentChildren(to);
+  const sourceChildren = contentChildren(from);
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const sourceChild = sourceChildren[i];
     if (child && sourceChild) copyLines(child, sourceChild);
   }
+}
+
+export interface UpdateOptions {
+  /**
+   * Says that a live block (which the post-processor may have rebuilt, for instance a rendered
+   * diagram) still stands for a fresh one, though the two differ structurally. Only the block's
+   * own `data-line` is refreshed; its contents are left alone.
+   */
+  equivalent?(live: Element, fresh: Element): boolean;
 }
 
 export interface BlockUpdate {
@@ -71,7 +101,11 @@ function withoutBlankText<T extends Node>(nodes: readonly T[]): T[] {
  * Makes the children of `container` match the children of `next`. `next` is emptied: its nodes
  * are moved into `container` where they are needed. Only ever pass sanitised pipeline output.
  */
-export function updateBlocks(container: HTMLElement, next: ParentNode): BlockUpdate {
+export function updateBlocks(
+  container: HTMLElement,
+  next: ParentNode,
+  options: UpdateOptions = {},
+): BlockUpdate {
   const current = withoutBlankText(Array.from(container.childNodes));
   const incoming = withoutBlankText(Array.from(next.childNodes));
   // Stray whitespace from an earlier render is dropped, so `current` is exactly the block list.
@@ -79,23 +113,35 @@ export function updateBlocks(container: HTMLElement, next: ParentNode): BlockUpd
     if (!current.includes(node)) node.remove();
   }
 
+  /** Whether `old` can stay for `fresh`; if so, brings its `data-line` marks up to date. */
+  const keep = (old: Node | undefined, fresh: Node | undefined): boolean => {
+    if (!old || !fresh) return false;
+    if (
+      options.equivalent &&
+      old.nodeType === Node.ELEMENT_NODE &&
+      fresh.nodeType === Node.ELEMENT_NODE &&
+      options.equivalent(old as Element, fresh as Element)
+    ) {
+      const line = (fresh as Element).getAttribute(LINE_ATTRIBUTE);
+      if (line === null) (old as Element).removeAttribute(LINE_ATTRIBUTE);
+      else if ((old as Element).getAttribute(LINE_ATTRIBUTE) !== line) {
+        (old as Element).setAttribute(LINE_ATTRIBUTE, line);
+      }
+      return true;
+    }
+    if (!sameIgnoringLines(old, fresh)) return false;
+    copyLines(old, fresh);
+    return true;
+  };
+
   let start = 0;
   const shortest = Math.min(current.length, incoming.length);
-  while (start < shortest) {
-    const old = current[start];
-    const fresh = incoming[start];
-    if (!old || !fresh || !sameIgnoringLines(old, fresh)) break;
-    copyLines(old, fresh);
-    start++;
-  }
+  while (start < shortest && keep(current[start], incoming[start])) start++;
 
   let endCurrent = current.length;
   let endIncoming = incoming.length;
   while (endCurrent > start && endIncoming > start) {
-    const old = current[endCurrent - 1];
-    const fresh = incoming[endIncoming - 1];
-    if (!old || !fresh || !sameIgnoringLines(old, fresh)) break;
-    copyLines(old, fresh);
+    if (!keep(current[endCurrent - 1], incoming[endIncoming - 1])) break;
     endCurrent--;
     endIncoming--;
   }

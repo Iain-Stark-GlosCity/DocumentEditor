@@ -13,6 +13,8 @@ export interface RenderRequest {
   text: string;
   /** Absolute path of the document, or null if it has never been saved. */
   path: string | null;
+  /** Settings of the provider (keys starting `<providerId>.`), as `RenderContext.settings`. */
+  settings?: Readonly<Record<string, boolean | number | string>>;
 }
 
 export type RenderResponse =
@@ -23,8 +25,12 @@ export type RenderResponse =
  * The context a provider renders with. `resolveAsset` is a pure function of the document path,
  * so it works inside a worker; it yields placeholders the main thread swaps for real URLs.
  */
-export function renderContext(path: string | null, signal?: AbortSignal): RenderContext {
-  return { path, resolveAsset: (relative) => assetPlaceholder(path, relative), signal };
+export function renderContext(
+  path: string | null,
+  signal?: AbortSignal,
+  settings?: RenderRequest["settings"],
+): RenderContext {
+  return { path, resolveAsset: (relative) => assetPlaceholder(path, relative), signal, settings };
 }
 
 export async function runRender(
@@ -42,7 +48,10 @@ export async function runRender(
     };
   }
   try {
-    const { html } = await provider.render(request.text, renderContext(request.path, signal));
+    const { html } = await provider.render(
+      request.text,
+      renderContext(request.path, signal, request.settings),
+    );
     return { seq: request.seq, ok: true, html };
   } catch (error) {
     return {

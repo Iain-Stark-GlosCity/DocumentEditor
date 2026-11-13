@@ -18,11 +18,33 @@ function devCsp(): Plugin {
   };
 }
 
+/**
+ * KaTeX's stylesheet lists each font as woff2, woff and ttf. WebView2 reads woff2, so keep only
+ * that: three times fewer files to bundle, and nothing the strict CSP would have to consider.
+ */
+function katexWoff2Only(): Plugin {
+  return {
+    name: "katex-woff2-only",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.split("?")[0]?.endsWith("katex/dist/katex.min.css")) return null;
+      return code.replace(
+        /,url\([^)]*\.woff\) format\("woff"\),url\([^)]*\.ttf\) format\("truetype"\)/g,
+        "",
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), devCsp()],
+  plugins: [react(), devCsp(), katexWoff2Only()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  build: { target: "es2022" },
+  build: {
+    target: "es2022",
+    // The CSP has `font-src 'self'`, which does not allow `data:` URIs: never inline a font.
+    assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/i.test(file) ? false : undefined),
+  },
   // The preview's render worker loads the Markdown pipeline with a dynamic import, which needs
   // an ES-module worker bundle.
   worker: { format: "es" },

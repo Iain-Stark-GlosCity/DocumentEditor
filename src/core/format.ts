@@ -77,6 +77,11 @@ export interface RenderContext {
   resolveAsset(relativePath: string): string;
   /** Aborted when a newer render supersedes this one. */
   signal?: AbortSignal;
+  /**
+   * Values of the settings the renderer reads (for example `markdown.math`), by key. Plain data,
+   * so it can cross to a worker. A key that is absent means "use the default".
+   */
+  settings?: Readonly<Record<string, boolean | number | string>>;
 }
 
 export interface RenderResult {

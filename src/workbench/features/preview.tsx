@@ -11,7 +11,10 @@ import type { FormatProvider } from "../../core/format";
 import type { Feature, FeatureComponentProps } from "../feature";
 import { useActiveDocument, useSetting } from "../hooks";
 import { updateBlocks } from "../preview/blockDiff";
+import { addCopyButtons, codeText, copyToClipboard } from "../preview/codeCopy";
+import { ensureKatexStyles, hasMathOutput } from "../preview/katexStyles";
 import { classifyLink } from "../preview/links";
+import { currentTheme, DiagramRenderer, isSameDiagram } from "../preview/mermaid";
 import { prepareFragment } from "../preview/prepare";
 import { PreviewModel } from "../preview/previewModel";
 import { PreviewScrollSync } from "../preview/scrollSync";
@@ -45,6 +48,10 @@ function PreviewPane({ workbench }: FeatureComponentProps) {
   const error = useStore(model.state, (s) => s.error);
   const fontSize = useSetting(workbench, "editor.fontSize");
   const loadRemoteImages = useSetting(workbench, "preview.loadRemoteImages");
+  const mermaidOn = useSetting(workbench, "markdown.mermaid");
+  const [diagrams] = useState(() => new DiagramRenderer());
+  const [notice, setNotice] = useState("");
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -81,11 +88,67 @@ function PreviewPane({ workbench }: FeatureComponentProps) {
       assetUrl: (path) => workbench.platform.assetUrl(path),
       loadRemoteImages,
     });
-    updateBlocks(content, fragment);
+    // A drawn diagram stands for its placeholder while the source is unchanged, so an edit
+    // elsewhere does not rebuild it.
+    updateBlocks(content, fragment, { equivalent: isSameDiagram });
+    // What the main thread adds once the sanitised HTML is in: copy buttons, KaTeX's stylesheet
+    // (first time maths appears) and diagrams (Mermaid is imported only if there is one).
+    addCopyButtons(content);
+    if (hasMathOutput(content)) void ensureKatexStyles();
+    if (mermaidOn) void diagrams.process(content, currentTheme()).then(() => undefined);
     syncRef.current?.followEditor();
-  }, [html, version, loadRemoteImages, workbench]);
+  }, [html, version, loadRemoteImages, mermaidOn, diagrams, workbench]);
+
+  // Draw diagrams again in the other palette when the theme changes.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || !mermaidOn) return;
+    const redraw = () => void diagrams.process(content, currentTheme());
+    const observer = new MutationObserver(redraw);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    const query =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-color-scheme: dark)")
+        : null;
+    query?.addEventListener("change", redraw);
+    return () => {
+      observer.disconnect();
+      query?.removeEventListener("change", redraw);
+    };
+  }, [diagrams, mermaidOn]);
+
+  function say(message: string) {
+    setNotice(message);
+    if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(""), 2000);
+  }
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  async function copyCode(button: Element) {
+    const copied = await copyToClipboard(codeText(button));
+    if (copied) {
+      button.setAttribute("data-copied", "");
+      setTimeout(() => button.removeAttribute("data-copied"), 2000);
+    }
+    say(copied ? "Code copied" : "Could not copy the code");
+  }
 
   function onClick(event: MouseEvent<HTMLElement>) {
+    const copyButton = (event.target as Element).closest("button.code-copy");
+    if (copyButton && event.currentTarget.contains(copyButton)) {
+      event.preventDefault();
+      void copyCode(copyButton);
+      return;
+    }
     const link = (event.target as Element).closest("a");
     if (!link || !event.currentTarget.contains(link)) return;
     // Nothing in the preview may navigate the app's own webview.
@@ -142,7 +205,7 @@ function PreviewPane({ workbench }: FeatureComponentProps) {
       style={{ ["--preview-font-size" as string]: `${fontSize * PREVIEW_SCALE}px` }}
     >
       <div className="preview-status" role="status" aria-live="polite">
-        {error ? `Preview not updated: ${error}` : slow ? "Rendering…" : ""}
+        {error ? `Preview not updated: ${error}` : slow ? "Rendering…" : notice}
       </div>
       <div
         ref={scrollerRef}

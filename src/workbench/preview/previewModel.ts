@@ -4,6 +4,7 @@
  * keeps the previous HTML while a new render is in progress.
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
+import { SETTINGS_SCHEMA, type SettingKey } from "../../core/settings";
 import type { Workbench } from "../workbench";
 import {
   createRenderer,
@@ -52,11 +53,18 @@ export class PreviewModel {
     });
     // Covers switching tabs and "Save as", which changes the path that images resolve against.
     const offDocuments = this.workbench.documents.subscribe(() => this.checkDocument());
+    // A change to one of the provider's own settings (for example `markdown.math`) changes the
+    // HTML, so render again at once.
+    const offSettings = this.workbench.settings.subscribeAll((key) => {
+      const doc = this.workbench.activeDocument();
+      if (doc && key.startsWith(`${doc.providerId}.`)) this.schedule(0);
+    });
     this.checkDocument();
 
     return () => {
       offText();
       offDocuments();
+      offSettings();
       this.clearTimers();
       this.renderer?.dispose();
       this.renderer = null;
@@ -91,6 +99,15 @@ export class PreviewModel {
     );
   }
 
+  /** The values of every setting whose key starts with `<providerId>.`. */
+  private providerSettings(providerId: string): Record<string, boolean | number | string> {
+    const settings: Record<string, boolean | number | string> = {};
+    for (const key of Object.keys(SETTINGS_SCHEMA) as SettingKey[]) {
+      if (key.startsWith(`${providerId}.`)) settings[key] = this.workbench.settings.get(key);
+    }
+    return settings;
+  }
+
   private clearTimers(): void {
     if (this.timer !== null) clearTimeout(this.timer);
     if (this.slowTimer !== null) clearTimeout(this.slowTimer);
@@ -113,7 +130,12 @@ export class PreviewModel {
     }, SLOW_RENDER_MS);
 
     try {
-      const html = await renderer.render({ providerId: provider.id, text, path: doc.path });
+      const html = await renderer.render({
+        providerId: provider.id,
+        text,
+        path: doc.path,
+        settings: this.providerSettings(provider.id),
+      });
       if (run !== this.run) return;
       this.lastRenderMs = Date.now() - started;
       this.state.setState((s) => ({
