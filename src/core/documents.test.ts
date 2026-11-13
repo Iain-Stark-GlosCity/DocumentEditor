@@ -16,7 +16,12 @@ describe("documents store", () => {
     const { documents, activeId } = store.getState();
     expect(documents.map((d) => d.title)).toEqual(["Untitled-1", "Untitled-2"]);
     expect(documents[0]?.path).toBeNull();
-    expect(documents[0]?.format).toEqual({ encoding: "utf-8", bom: false, eol: "crlf", mixedEol: false });
+    expect(documents[0]?.format).toEqual({
+      encoding: "utf-8",
+      bom: false,
+      eol: "crlf",
+      mixedEol: false,
+    });
     expect(activeId).toBe(b);
     expect(a).not.toBe(b);
   });
@@ -25,7 +30,13 @@ describe("documents store", () => {
     const store = createDocumentsStore();
     const id = store.getState().openFromFile("C:\\notes\\a.md", data("hello"), "markdown");
     const doc = store.getState().documents[0];
-    expect(doc).toMatchObject({ id, title: "a.md", savedText: "hello", modifiedMs: 100, providerId: "markdown" });
+    expect(doc).toMatchObject({
+      id,
+      title: "a.md",
+      savedText: "hello",
+      modifiedMs: 100,
+      providerId: "markdown",
+    });
     expect(doc?.format.encoding).toBe("utf-16le");
 
     store.getState().openUntitled("markdown");

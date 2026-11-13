@@ -1,0 +1,50 @@
+/* Theme tokens. Light by default, dark when the system asks for it. */
+:root {
+  color-scheme: light dark;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+
+  --bg: #ffffff;
+  --bg-chrome: #f1f3f5;
+  --bg-tab-active: #ffffff;
+  --bg-hover: #e4e7eb;
+  --fg: #1b1f24;
+  --fg-muted: #4b5563;
+  --border: #c5cad1;
+  --accent: #0b5cad;
+  --accent-fg: #ffffff;
+  --danger-bg: #fdecea;
+  --danger-fg: #7a1a12;
+  --focus: #0b5cad;
+  --backdrop: rgb(0 0 0 / 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --bg-chrome: #1d2126;
+    --bg-tab-active: #14171b;
+    --bg-hover: #2a3037;
+    --fg: #e6e9ed;
+    --fg-muted: #aab2bd;
+    --border: #3a414a;
+    --accent: #6cb2ff;
+    --accent-fg: #0b1220;
+    --danger-bg: #3a1d1a;
+    --danger-fg: #ffb4a9;
+    --focus: #6cb2ff;
+    --backdrop: rgb(0 0 0 / 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -3,3 +3,6 @@ node_modules
 src-tauri/target
 src-tauri/gen
 package-lock.json
+CLAUDE.md
+src/core/format.ts
+src/platform/platform.ts

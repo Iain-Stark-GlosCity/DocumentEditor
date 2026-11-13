@@ -6,7 +6,8 @@ import tseslint from "typescript-eslint";
 
 const tauriPattern = {
   group: ["@tauri-apps/*"],
-  message: "Only src/platform/ may import @tauri-apps/* (CLAUDE.md rule 2). Use the Platform interface.",
+  message:
+    "Only src/platform/ may import @tauri-apps/* (CLAUDE.md rule 2). Use the Platform interface.",
 };
 
 export default defineConfig(
@@ -37,7 +38,10 @@ export default defineConfig(
           ],
           patterns: [
             tauriPattern,
-            { group: ["react/*", "react-dom/*"], message: "src/core/ must not import React (CLAUDE.md rule 3)." },
+            {
+              group: ["react/*", "react-dom/*"],
+              message: "src/core/ must not import React (CLAUDE.md rule 3).",
+            },
           ],
         },
       ],
@@ -54,7 +58,8 @@ export default defineConfig(
             tauriPattern,
             {
               group: ["**/formats/*", "**/formats"],
-              message: "The workbench must not import from a format folder (CLAUDE.md rule 4). Use the registry.",
+              message:
+                "The workbench must not import from a format folder (CLAUDE.md rule 4). Use the registry.",
             },
           ],
         },
