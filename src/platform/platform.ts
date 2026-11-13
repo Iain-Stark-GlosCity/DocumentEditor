@@ -78,4 +78,9 @@ export interface Platform {
   onCloseRequested(handler: () => Promise<boolean>): Promise<() => void>;
 
   setWindowTitle(title: string): Promise<void>;
+
+  /** The stored settings JSON, or null if none has been saved yet. */
+  readSettings(): Promise<string | null>;
+  /** Atomic: replaces the stored settings JSON. */
+  writeSettings(json: string): Promise<void>;
 }

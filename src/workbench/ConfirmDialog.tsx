@@ -1,17 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
-
-export interface DialogAction {
-  value: string;
-  label: string;
-}
-
-export interface DialogRequest {
-  title: string;
-  message: string;
-  actions: DialogAction[];
-  /** Returned when the dialog is dismissed with Escape. */
-  cancelValue: string;
-}
+import type { DialogRequest } from "./workbench";
 
 export interface ConfirmDialogProps extends DialogRequest {
   onChoose(value: string): void;

@@ -20,8 +20,31 @@
   --backdrop: rgb(0 0 0 / 0.4);
 }
 
+/* The theme feature sets data-theme to "light" or "dark" (resolving "system"). Before it runs,
+   the media query below gives the same result without a flash. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14171b;
+  --bg-chrome: #1d2126;
+  --bg-tab-active: #14171b;
+  --bg-hover: #2a3037;
+  --fg: #e6e9ed;
+  --fg-muted: #aab2bd;
+  --border: #3a414a;
+  --accent: #6cb2ff;
+  --accent-fg: #0b1220;
+  --danger-bg: #3a1d1a;
+  --danger-fg: #ffb4a9;
+  --focus: #6cb2ff;
+  --backdrop: rgb(0 0 0 / 0.6);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #14171b;
     --bg-chrome: #1d2126;
     --bg-tab-active: #14171b;

@@ -40,6 +40,8 @@ export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabS
     document.getElementById(tabId(target.id))?.focus();
   }
 
+  if (documents.length === 0) return null;
+
   return (
     <div className="tabstrip" role="tablist" aria-label="Open documents" onKeyDown={onKeyDown}>
       {documents.map((doc) => {
@@ -57,6 +59,15 @@ export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabS
               tabIndex={selected ? 0 : -1}
               title={doc.path ?? doc.title}
               onClick={() => onSelect(doc.id)}
+              // Middle-click closes the tab. Stop the browser's autoscroll on mouse down.
+              onMouseDown={(e) => {
+                if (e.button === 1) e.preventDefault();
+              }}
+              onAuxClick={(e) => {
+                if (e.button !== 1) return;
+                e.preventDefault();
+                onClose(doc.id);
+              }}
             >
               <span className="tab-title">{doc.title}</span>
               {isDirty && (

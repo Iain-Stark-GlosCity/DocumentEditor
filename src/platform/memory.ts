@@ -22,6 +22,8 @@ export class MemoryPlatform implements Platform {
   readonly files = new Map<string, StoredFile>();
   readonly recovery = new Map<string, RecoverySnapshot>();
   windowTitle = "";
+  /** What `writeSettings` last stored (tests may set it to simulate an existing file). */
+  settingsJson: string | null = null;
 
   private readonly openDialogResults: string[][] = [];
   private readonly saveDialogResults: (string | null)[] = [];
@@ -131,6 +133,14 @@ export class MemoryPlatform implements Platform {
 
   async setWindowTitle(title: string): Promise<void> {
     this.windowTitle = title;
+  }
+
+  async readSettings(): Promise<string | null> {
+    return this.settingsJson;
+  }
+
+  async writeSettings(json: string): Promise<void> {
+    this.settingsJson = json;
   }
 
   /** Strictly increasing so tests can tell successive writes apart. */

@@ -245,3 +245,275 @@ button {
     outline: 2px solid Highlight;
   }
 }
+
+/* Menu bar */
+.menubar {
+  display: flex;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+}
+
+.menu-wrap {
+  position: relative;
+}
+
+.menu-top {
+  padding: 5px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.menu-top:hover,
+.menu-top[aria-expanded="true"] {
+  background: var(--bg-hover);
+}
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 240px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+}
+
+.menu li {
+  list-style: none;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 5px 16px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--accent);
+  color: var(--accent-fg);
+  outline-offset: -2px;
+}
+
+.menu-item[aria-disabled="true"] {
+  color: var(--fg-muted);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.menu-item[aria-disabled="true"]:hover {
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.menu-keys,
+.palette-option kbd,
+.empty-shortcuts kbd {
+  font: 12px var(--font-ui);
+  opacity: 0.8;
+}
+
+/* Command palette */
+.palette-backdrop {
+  place-items: start center;
+  padding-top: 12vh;
+  z-index: 30;
+}
+
+.palette {
+  width: min(560px, calc(100vw - 32px));
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.palette-input {
+  width: 100%;
+  padding: 10px 14px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-list {
+  max-height: 320px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.palette-option[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.palette-option[aria-selected="true"] kbd {
+  opacity: 1;
+}
+
+.palette-status {
+  margin: 0;
+  padding: 4px 14px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Empty state */
+.empty-state {
+  margin: auto;
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.empty-state p {
+  margin: 0 0 16px;
+  color: var(--fg-muted);
+}
+
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.empty-actions button {
+  padding: 6px 14px;
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.empty-actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.empty-shortcuts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.empty-shortcuts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.empty-shortcuts dt,
+.empty-shortcuts dd {
+  margin: 0;
+}
+
+/* Editor area with optional side panes */
+.editor-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.editor-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.splitter {
+  flex: none;
+  width: 6px;
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.splitter:hover,
+.splitter:focus-visible {
+  background: var(--accent);
+}
+
+.side-pane {
+  flex: 0 0 40%;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+/* Status bar, banners and gutters */
+.status-item:empty {
+  display: none;
+}
+
+.status-right {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.banner[data-kind="info"],
+.banner[data-kind="warning"] {
+  background: var(--bg-chrome);
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-host .cm-gutters {
+  background: var(--bg-chrome);
+  color: var(--fg-muted);
+  border-right: 1px solid var(--border);
+}
+
+@media (forced-colors: active) {
+  .menu-item:focus-visible,
+  .palette-option[aria-selected="true"] {
+    outline: 2px solid Highlight;
+  }
+}

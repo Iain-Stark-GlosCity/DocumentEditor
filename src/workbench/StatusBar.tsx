@@ -1,39 +1,28 @@
-import type { FileFormat } from "../platform/platform";
+import type { StatusItem } from "./feature";
+import { useActiveDocument } from "./hooks";
+import type { Workbench } from "./workbench";
 
-export interface StatusBarProps {
-  cursor: { line: number; col: number } | null;
-  format: FileFormat | null;
+function sorted(items: readonly StatusItem[], align: "left" | "right"): StatusItem[] {
+  return items
+    .filter((i) => (i.align ?? "left") === align)
+    .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
 }
 
-const ENCODING_NAMES = {
-  "utf-8": "UTF-8",
-  "utf-16le": "UTF-16 LE",
-  "utf-16be": "UTF-16 BE",
-} as const;
-
-export function encodingLabel(format: FileFormat): string {
-  return `${ENCODING_NAMES[format.encoding]}${format.bom ? " with BOM" : ""}`;
-}
-
-export function eolLabel(format: FileFormat): string {
-  const name = format.eol === "crlf" ? "CRLF" : "LF";
-  return format.mixedEol ? `${name} (mixed)` : name;
-}
-
-export function StatusBar({ cursor, format }: StatusBarProps) {
+/** Renders the status items contributed by features. */
+export function StatusBar({ workbench }: { workbench: Workbench }) {
+  const active = useActiveDocument(workbench);
+  const items = workbench.features.flatMap((f) => f.statusItems ?? []);
+  const render = (list: StatusItem[]) =>
+    list.map(({ id, component: Item }) => (
+      <div key={id} className="status-item">
+        <Item workbench={workbench} />
+      </div>
+    ));
   return (
     <footer className="statusbar" aria-label="Status">
-      {cursor && format ? (
-        <>
-          <span>
-            Ln {cursor.line}, Col {cursor.col}
-          </span>
-          <span>{encodingLabel(format)}</span>
-          <span>{eolLabel(format)}</span>
-        </>
-      ) : (
-        <span>No document open</span>
-      )}
+      {active === null && <span>No document open</span>}
+      {render(sorted(items, "left"))}
+      <div className="status-right">{render(sorted(items, "right"))}</div>
     </footer>
   );
 }

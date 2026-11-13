@@ -89,4 +89,12 @@ export class TauriPlatform implements Platform {
   setWindowTitle(title: string): Promise<void> {
     return getCurrentWindow().setTitle(title);
   }
+
+  readSettings(): Promise<string | null> {
+    return call<string | null>("read_settings");
+  }
+
+  writeSettings(json: string): Promise<void> {
+    return call<void>("write_settings", { json });
+  }
 }

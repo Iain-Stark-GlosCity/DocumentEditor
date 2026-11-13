@@ -1,3 +1,4 @@
+pub mod atomic;
 pub mod commands;
 pub mod textfile;
 
@@ -66,6 +67,8 @@ pub fn run() {
             commands::clear_recovery,
             commands::list_recovery,
             commands::take_open_requests,
+            commands::read_settings,
+            commands::write_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DocumentEditor");

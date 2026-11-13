@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
@@ -13,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 
+use crate::atomic::atomic_write;
 use crate::textfile::{self, FileFormat};
 
 #[derive(Error, Debug)]
@@ -92,27 +92,30 @@ pub fn read_file(path: String) -> Result<FileData> {
 #[tauri::command]
 pub fn write_file(path: String, text: String, format: FileFormat) -> Result<WriteResult> {
     let target = PathBuf::from(&path);
-    let dir = target.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let name = target
-        .file_name()
-        .ok_or_else(|| AppError::Other(format!("Not a file path: {path}")))?
-        .to_string_lossy();
-    let temp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-
-    let bytes = textfile::encode(&text, &format);
-    let written = (|| -> std::io::Result<()> {
-        let mut file = fs::File::create(&temp)?;
-        file.write_all(&bytes)?;
-        file.flush()?;
-        file.sync_all()?;
-        drop(file);
-        fs::rename(&temp, &target)
-    })();
-    if let Err(e) = written {
-        let _ = fs::remove_file(&temp);
-        return Err(e.into());
-    }
+    atomic_write(&target, &textfile::encode(&text, &format))?;
     Ok(WriteResult { modified_ms: modified_ms(&target)? })
+}
+
+fn settings_file(app: &AppHandle) -> Result<PathBuf> {
+    let dir = app.path().app_config_dir().map_err(|e| AppError::Other(e.to_string()))?;
+    fs::create_dir_all(&dir)?;
+    Ok(dir.join("settings.json"))
+}
+
+/// The stored settings JSON, or `None` if the file does not exist yet.
+#[tauri::command]
+pub fn read_settings(app: AppHandle) -> Result<Option<String>> {
+    match fs::read_to_string(settings_file(&app)?) {
+        Ok(json) => Ok(Some(json)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+#[tauri::command]
+pub fn write_settings(app: AppHandle, json: String) -> Result<()> {
+    atomic_write(&settings_file(&app)?, json.as_bytes())?;
+    Ok(())
 }
 
 /// Watches the file's folder (a watch on the file itself is lost when an atomic save replaces
