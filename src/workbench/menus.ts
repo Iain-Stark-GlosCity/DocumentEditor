@@ -16,9 +16,15 @@ export interface MenuModel {
   groups: MenuEntry[][];
 }
 
-const KNOWN_MENUS = ["file", "edit", "view"];
+const KNOWN_MENUS = ["file", "edit", "format", "view"];
 const LAST_MENU = "help";
-const LABELS: Record<string, string> = { file: "File", edit: "Edit", view: "View", help: "Help" };
+const LABELS: Record<string, string> = {
+  file: "File",
+  edit: "Edit",
+  format: "Format",
+  view: "View",
+  help: "Help",
+};
 
 function labelFor(id: string): string {
   return LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);

@@ -10,6 +10,7 @@ import { externalChanges } from "./external-changes";
 import { find } from "./find";
 import { fileCommands } from "./file-commands";
 import { recovery } from "./recovery";
+import { formatMenu } from "./format-menu";
 import { help } from "./help";
 import { preview } from "./preview";
 import { statusCursor } from "./status-cursor";
@@ -22,6 +23,7 @@ import { windowTitle } from "./window-title";
 export const defaultFeatures: readonly Feature[] = [
   fileCommands,
   editCommands,
+  formatMenu,
   editorAppearance,
   find,
   theme,
