@@ -5,6 +5,7 @@
 import type { Feature } from "../feature";
 import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
+import { find } from "./find";
 import { fileCommands } from "./file-commands";
 import { help } from "./help";
 import { statusCursor } from "./status-cursor";
@@ -18,6 +19,7 @@ export const defaultFeatures: readonly Feature[] = [
   fileCommands,
   editCommands,
   editorAppearance,
+  find,
   theme,
   tabs,
   uiCommands,

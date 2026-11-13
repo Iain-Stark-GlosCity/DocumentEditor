@@ -5,7 +5,6 @@
  */
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { search, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState, type Extension, type StateEffect } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -112,8 +111,7 @@ const baseExtensions: Extension[] = [
   // The buffer is always `\n`; a lone `\r` must stay part of the text (CLAUDE.md rule 1).
   EditorState.lineSeparator.of("\n"),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  search({ top: true }),
-  keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+  keymap.of([...defaultKeymap, ...historyKeymap]),
   EditorView.contentAttributes.of({ "aria-label": "Document text" }),
 ];
 

@@ -5,6 +5,7 @@ import { markdownProvider } from "./formats/markdown";
 import { getPlatform } from "./platform";
 import "./styles/theme.css";
 import "./styles/app.css";
+import "./styles/search.css";
 import { App } from "./workbench/App";
 
 const registry = new FormatRegistry();
