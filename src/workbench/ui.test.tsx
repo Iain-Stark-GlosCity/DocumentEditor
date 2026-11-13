@@ -62,6 +62,8 @@ describe("menu bar", () => {
       "Theme: follow system",
       "Theme: light",
       "Theme: dark",
+      "Toggle split previewAlt+P",
+      "Switch focus between editor and previewF6",
       "Command paletteCtrl+Shift+P",
     ]);
     expect(textsOf("Help")).toEqual(["About DocumentEditor"]);

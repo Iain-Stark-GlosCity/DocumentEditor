@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod atomic;
 pub mod commands;
 pub mod textfile;
@@ -52,6 +53,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .setup(|app| {
             let paths = paths_from_args(std::env::args().skip(1), None);

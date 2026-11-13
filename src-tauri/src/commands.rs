@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 
+use crate::assets::asset_dir_for;
 use crate::atomic::atomic_write;
 use crate::textfile::{self, FileFormat};
 
@@ -81,18 +82,29 @@ fn modified_ms(path: &Path) -> Result<u64> {
     Ok(modified.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0))
 }
 
+/// Let the webview load images from the folder of a file we read or wrote, so a document can show
+/// its local images. The asset protocol scope starts empty (not global); this is the only place
+/// it grows. Failure is not fatal: the document still opens, its local images just will not load.
+fn allow_assets_beside(app: &AppHandle, file: &Path) {
+    if let Some(dir) = asset_dir_for(file) {
+        let _ = app.asset_protocol_scope().allow_directory(dir, true);
+    }
+}
+
 #[tauri::command]
-pub fn read_file(path: String) -> Result<FileData> {
+pub fn read_file(app: AppHandle, path: String) -> Result<FileData> {
     let bytes = fs::read(&path)?;
     let (text, format) = textfile::decode(&bytes)?;
+    allow_assets_beside(&app, Path::new(&path));
     Ok(FileData { text, format, modified_ms: modified_ms(Path::new(&path))? })
 }
 
 /// Atomic: write a temporary file beside the target, flush it to disk, then rename over it.
 #[tauri::command]
-pub fn write_file(path: String, text: String, format: FileFormat) -> Result<WriteResult> {
+pub fn write_file(app: AppHandle, path: String, text: String, format: FileFormat) -> Result<WriteResult> {
     let target = PathBuf::from(&path);
     atomic_write(&target, &textfile::encode(&text, &format))?;
+    allow_assets_beside(&app, &target);
     Ok(WriteResult { modified_ms: modified_ms(&target)? })
 }
 

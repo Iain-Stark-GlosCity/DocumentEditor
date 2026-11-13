@@ -7,6 +7,7 @@ import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
 import { fileCommands } from "./file-commands";
 import { help } from "./help";
+import { preview } from "./preview";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
 import { tabs } from "./tabs";
@@ -25,4 +26,5 @@ export const defaultFeatures: readonly Feature[] = [
   statusCursor,
   statusFormat,
   windowTitle,
+  preview,
 ];

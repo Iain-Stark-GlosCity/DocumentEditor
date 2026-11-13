@@ -1,14 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type {
-  FileChange,
-  FileData,
-  FileFilter,
-  FileFormat,
-  Platform,
-  RecoverySnapshot,
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  isExternalUrl,
+  type FileChange,
+  type FileData,
+  type FileFilter,
+  type FileFormat,
+  type Platform,
+  type RecoverySnapshot,
 } from "./platform";
 
 /** Rust commands reject with a plain string; surface it as a proper Error. */
@@ -96,5 +98,15 @@ export class TauriPlatform implements Platform {
 
   writeSettings(json: string): Promise<void> {
     return call<void>("write_settings", { json });
+  }
+
+  async openExternal(url: string): Promise<void> {
+    // The capability file restricts schemes as well; this keeps the rule visible in one place.
+    if (!isExternalUrl(url)) throw new Error(`Cannot open ${url}`);
+    await openUrl(url);
+  }
+
+  assetUrl(absolutePath: string): string {
+    return convertFileSrc(absolutePath);
   }
 }

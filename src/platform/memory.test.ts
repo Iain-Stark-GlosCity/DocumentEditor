@@ -87,3 +87,21 @@ describe("MemoryPlatform settings", () => {
     expect(await platform.readSettings()).toBe('{"editor.fontSize":18}');
   });
 });
+
+describe("MemoryPlatform links and assets", () => {
+  it("records external URLs and refuses other schemes", async () => {
+    const platform = new MemoryPlatform();
+    await platform.openExternal("https://example.com");
+    await platform.openExternal("mailto:a@example.com");
+    expect(platform.openedUrls).toEqual(["https://example.com", "mailto:a@example.com"]);
+    await expect(platform.openExternal("file:///C:/x")).rejects.toThrow();
+    await expect(platform.openExternal("javascript:alert(1)")).rejects.toThrow();
+    expect(platform.openedUrls).toHaveLength(2);
+  });
+
+  it("makes a distinct asset URL for each path", () => {
+    const platform = new MemoryPlatform();
+    expect(platform.assetUrl("C:\\a b\\x.png")).not.toBe(platform.assetUrl("C:\\a b\\y.png"));
+    expect(platform.assetUrl("C:\\a b\\x.png")).toContain(encodeURIComponent("C:\\a b\\x.png"));
+  });
+});

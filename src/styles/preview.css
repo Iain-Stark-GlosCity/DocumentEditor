@@ -1,0 +1,308 @@
+/* The rendered preview. Colours come from the theme tokens in theme.css, so light, dark and the
+   system theme all work. Sizes are in em, scaled by --preview-font-size (set from editor.fontSize). */
+
+.preview {
+  --preview-subtle: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  --preview-stripe: color-mix(in srgb, var(--fg) 4%, var(--bg));
+  --preview-rule: var(--border);
+
+  position: relative;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--preview-font-size, 16px);
+}
+
+.preview-scroll {
+  height: 100%;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.preview-scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* A small, quiet line in the corner. It is empty (and takes no room) unless something is said. */
+.preview-status {
+  position: absolute;
+  top: 0.4em;
+  right: 1.2em;
+  z-index: 1;
+  max-width: 80%;
+  padding: 0.1em 0.6em;
+  border-radius: 0.8em;
+  background: var(--bg-chrome);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  font: 0.75em/1.6 var(--font-ui);
+  pointer-events: none;
+}
+
+.preview-status:empty {
+  display: none;
+}
+
+/* Sensible line length: about 75 characters at most, centred in a wider pane. */
+.preview-content {
+  box-sizing: border-box;
+  max-width: 46em;
+  margin: 0 auto;
+  padding: 1.25em 1.5em 3em;
+  font-family: var(--font-ui);
+  line-height: 1.65;
+}
+
+.preview-content > :first-child {
+  margin-top: 0;
+}
+
+/* Headings */
+.preview-content h1,
+.preview-content h2,
+.preview-content h3,
+.preview-content h4,
+.preview-content h5,
+.preview-content h6 {
+  margin: 1.6em 0 0.5em;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+.preview-content h1 {
+  font-size: 2em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--preview-rule);
+}
+
+.preview-content h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--preview-rule);
+}
+
+.preview-content h3 {
+  font-size: 1.25em;
+}
+
+.preview-content h4 {
+  font-size: 1em;
+}
+
+.preview-content h5,
+.preview-content h6 {
+  font-size: 0.9em;
+  color: var(--fg-muted);
+}
+
+.preview-content p,
+.preview-content ul,
+.preview-content ol,
+.preview-content dl,
+.preview-content pre,
+.preview-content blockquote,
+.preview-content table,
+.preview-content details {
+  margin: 0 0 1em;
+}
+
+/* Links keep an underline so they are not told apart by colour alone. */
+.preview-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.preview-content a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.preview-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* An image that is not loaded shows its alternative text in a quiet box. */
+.preview-content img.preview-image-blocked {
+  display: inline-block;
+  padding: 0.2em 0.5em;
+  border: 1px dashed var(--border);
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+.preview-content hr {
+  height: 0;
+  margin: 1.5em 0;
+  border: 0;
+  border-top: 2px solid var(--preview-rule);
+}
+
+/* Lists */
+.preview-content ul,
+.preview-content ol {
+  padding-left: 2em;
+}
+
+.preview-content li > ul,
+.preview-content li > ol {
+  margin-bottom: 0;
+}
+
+.preview-content li + li {
+  margin-top: 0.25em;
+}
+
+/* Task lists: the checkbox replaces the bullet. */
+.preview-content ul.contains-task-list {
+  list-style: none;
+  padding-left: 1.5em;
+}
+
+.preview-content li.task-list-item > input[type="checkbox"] {
+  margin: 0 0.5em 0.15em -1.4em;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+/* Blockquotes */
+.preview-content blockquote {
+  padding: 0.1em 1em;
+  border-left: 0.25em solid var(--preview-rule);
+  color: var(--fg-muted);
+}
+
+.preview-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* Code */
+.preview-content code,
+.preview-content kbd,
+.preview-content samp {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.preview-content :not(pre) > code {
+  padding: 0.15em 0.35em;
+  border-radius: 0.3em;
+  background: var(--preview-subtle);
+  border: 1px solid var(--preview-rule);
+}
+
+.preview-content pre {
+  padding: 0.9em 1em;
+  overflow: auto;
+  border-radius: 0.4em;
+  background: var(--preview-subtle);
+  border: 1px solid var(--preview-rule);
+  line-height: 1.45;
+  tab-size: 4;
+}
+
+.preview-content pre:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.preview-content pre > code {
+  font-size: 0.875em;
+  background: none;
+  border: 0;
+  padding: 0;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+/* Tables scroll sideways inside their own box rather than widening the pane. */
+.preview-content table {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+}
+
+.preview-content th,
+.preview-content td {
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--preview-rule);
+  overflow-wrap: normal;
+}
+
+.preview-content th {
+  background: var(--preview-subtle);
+  font-weight: 650;
+}
+
+.preview-content tbody tr:nth-child(even) {
+  background: var(--preview-stripe);
+}
+
+.preview-content del {
+  color: var(--fg-muted);
+}
+
+/* Footnotes (GFM): a quiet list at the end, with the heading kept for screen readers. */
+.preview-content .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.preview-content section[data-footnotes] {
+  margin-top: 2.5em;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--preview-rule);
+  font-size: 0.9em;
+  color: var(--fg-muted);
+}
+
+.preview-content section[data-footnotes] ol {
+  margin-bottom: 0;
+}
+
+.preview-content sup > a[data-footnote-ref] {
+  text-decoration: none;
+  padding: 0 0.1em;
+}
+
+.preview-content a[data-footnote-backref] {
+  text-decoration: none;
+  margin-left: 0.25em;
+}
+
+/* Windows high contrast: use the user's colours and keep every edge visible. */
+@media (forced-colors: active) {
+  .preview-content a {
+    color: LinkText;
+  }
+
+  .preview-content :not(pre) > code,
+  .preview-content pre,
+  .preview-content th,
+  .preview-content td,
+  .preview-content blockquote,
+  .preview-status {
+    border-color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+
+  .preview-content blockquote {
+    border-left-color: CanvasText;
+  }
+
+  .preview-scroll:focus-visible,
+  .preview-content a:focus-visible {
+    outline-color: Highlight;
+  }
+}
