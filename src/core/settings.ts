@@ -45,6 +45,7 @@ export const SETTINGS_SCHEMA = {
   "editor.wordWrap": bool(true),
   "editor.lineNumbers": bool(false),
   "editor.viewMode": oneOf(["source", "live", "split"], "source"),
+  "markdown.tables.autoFormat": bool(true),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),

@@ -1,4 +1,5 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { tableCommands, tableExtensions } from "./tables";
 import type { OutlineItem, TextFormatProvider } from "../../core/format";
 
 /**
@@ -21,11 +22,15 @@ export const markdownProvider: TextFormatProvider = {
   name: "Markdown",
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
   viewModes: ["source", "split"],
-  editorExtensions: () => {
+  commands: [...tableCommands],
+  editorExtensions: (context) => {
     // Opening a Markdown document starts loading the pipeline in the background, so that the
     // synchronous `outline` below has it ready by the time the outline panel asks.
     void loadPipeline();
-    return [markdown({ base: markdownLanguage })];
+    return [
+      markdown({ base: markdownLanguage }),
+      ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
+    ];
   },
   async render(text, context) {
     return (await loadPipeline()).renderMarkdown(text, context);
