@@ -67,6 +67,7 @@ export const SETTINGS_SCHEMA = {
   "editor.maxLineWidth": num(0, 0, 400, true),
   "outline.visible": bool(false),
   "ui.paneSizes": paneSizes(),
+  "markdown.tables.autoFormat": bool(true),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),

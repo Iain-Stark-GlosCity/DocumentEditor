@@ -18,6 +18,7 @@ import { preview } from "./preview";
 import { spellcheck } from "./spellcheck";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
+import { tableMenu } from "./table-menu";
 import { tabs } from "./tabs";
 import { theme } from "./theme";
 import { uiCommands } from "./ui-commands";
@@ -46,4 +47,5 @@ export const defaultFeatures: readonly Feature[] = [
   preview,
   spellcheck,
   wordCount,
+  tableMenu,
 ];
