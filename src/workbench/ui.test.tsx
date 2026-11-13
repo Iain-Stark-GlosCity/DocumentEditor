@@ -32,6 +32,7 @@ describe("menu bar", () => {
       "Open file…Ctrl+O",
       "SaveCtrl+S",
       "Save as…Ctrl+Shift+S",
+      "Autosave: off",
       "Close tabCtrl+W",
     ]);
     expect(menuItem("File").getAttribute("aria-expanded")).toBe("true");

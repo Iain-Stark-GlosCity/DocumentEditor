@@ -54,7 +54,9 @@ export function ConfirmDialog({
         onKeyDown={onKeyDown}
       >
         <h2 id="dialog-title">{title}</h2>
-        <p id="dialog-message">{message}</p>
+        <p id="dialog-message" style={{ whiteSpace: "pre-line" }}>
+          {message}
+        </p>
         <div className="dialog-actions">
           {actions.map((action) => (
             <button key={action.value} type="button" onClick={() => onChoose(action.value)}>

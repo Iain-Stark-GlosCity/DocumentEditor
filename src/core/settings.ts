@@ -45,8 +45,9 @@ export const SETTINGS_SCHEMA = {
   "editor.wordWrap": bool(true),
   "editor.lineNumbers": bool(false),
   "editor.viewMode": oneOf(["source", "live", "split"], "source"),
-  "files.autoSave": oneOf(["off", "afterDelay"], "off"),
+  "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),
   "files.autoSaveDelayMs": num(1500, 100, 600_000, true),
+  "files.recoveryIntervalMs": num(3000, 100, 600_000, true),
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

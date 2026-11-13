@@ -3,10 +3,13 @@
  * `Feature` and add one line below. Nothing else needs to change.
  */
 import type { Feature } from "../feature";
+import { autosave } from "./autosave";
 import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
+import { externalChanges } from "./external-changes";
 import { find } from "./find";
 import { fileCommands } from "./file-commands";
+import { recovery } from "./recovery";
 import { help } from "./help";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
@@ -27,4 +30,7 @@ export const defaultFeatures: readonly Feature[] = [
   statusCursor,
   statusFormat,
   windowTitle,
+  externalChanges,
+  autosave,
+  recovery,
 ];
