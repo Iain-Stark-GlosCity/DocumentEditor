@@ -11,7 +11,7 @@ const tauriPattern = {
 };
 
 export default defineConfig(
-  { ignores: ["dist", "node_modules", "src-tauri/target", "src-tauri/gen"] },
+  { ignores: [".claude", "dist", "node_modules", "src-tauri/target", "src-tauri/gen"] },
   js.configs.recommended,
   tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
