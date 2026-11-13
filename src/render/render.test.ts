@@ -32,18 +32,20 @@ describe("basic rendering", () => {
     expect(out).toContain("<table");
     expect(out).toContain('align="left"');
     expect(out).toContain('align="right"');
-    expect(out).toContain('<input type="checkbox" checked disabled>');
-    expect(out).toContain('<input type="checkbox" disabled>');
+    expect(out).toContain(
+      '<input type="checkbox" checked disabled class="task-list-item-checkbox">',
+    );
+    expect(out).toContain('<input type="checkbox" disabled class="task-list-item-checkbox">');
     expect(out).toContain("<del>gone</del>");
     expect(out).toContain('<a href="https://example.com">https://example.com</a>');
     expect(out).toContain('href="#user-content-fn-1"');
     expect(out).toContain('id="user-content-fn-1"');
   });
 
-  it("keeps the language class on fenced code and does not highlight", async () => {
+  it("keeps the language class on fenced code, with the highlighter's markup inside", async () => {
     const out = await html("```ts\nconst x = 1;\n```");
     expect(out).toContain(
-      '<pre data-line="1"><code class="language-ts">const x = 1;\n</code></pre>',
+      '<pre data-line="1"><code class="hljs language-ts"><span class="hljs-keyword">const</span> x = <span class="hljs-number">1</span>;\n</code></pre>',
     );
   });
 
@@ -171,7 +173,7 @@ describe("sanitising", () => {
 describe("data-line", () => {
   it("marks top-level blocks with their start line", async () => {
     const out = await html("# Title\n\nPara one\ncontinues\n\n```js\ncode\n```\n\n---\n\nLast");
-    expect(out).toContain('<h1 data-line="1">');
+    expect(out).toContain('<h1 data-line="1" id="user-content-title">');
     expect(out).toContain('<p data-line="3">');
     expect(out).toContain('<pre data-line="6">');
     expect(out).toContain('<hr data-line="10">');
@@ -207,7 +209,7 @@ describe("data-line", () => {
 
   it("uses real file lines when front matter is present", async () => {
     const out = await html("---\ntitle: x\n---\n\n# Heading\n\ntext");
-    expect(out).toContain('<h1 data-line="5">');
+    expect(out).toContain('<h1 data-line="5" id="user-content-heading">');
     expect(out).toContain('<p data-line="7">text</p>');
   });
 

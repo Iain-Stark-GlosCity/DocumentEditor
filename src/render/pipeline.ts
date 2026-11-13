@@ -13,8 +13,17 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
+import remarkMath from "remark-math";
 import { unified, type Processor } from "unified";
 import type { RenderContext } from "../core/format";
+import {
+  MERMAID_CLASS,
+  rehypeHeadingIds,
+  rehypeMermaidPlaceholders,
+  rehypeTaskListClasses,
+} from "./enhance";
+import { remarkDollarMath } from "./math/dollar";
+import { rehypeMath } from "./math/katex";
 
 export interface PipelineOptions {
   /** Parse YAML front matter and keep it out of the body. Default true. */
@@ -30,6 +39,16 @@ export interface PipelineOptions {
    * examples include raw HTML that the sanitiser (correctly) removes.
    */
   sanitise?: boolean;
+  /** `$inline$` and `$$block$$` maths, rendered with KaTeX (loaded only when needed). Default true. */
+  math?: boolean;
+  /** Leave ```` ```mermaid ```` blocks as `pre.mermaid-source` placeholders for the preview. Default true. */
+  mermaid?: boolean;
+  /** Highlight fenced code that names a language (grammars load on demand). Default true. */
+  highlight?: boolean;
+  /** GitHub-style `id`s on headings. Default true. */
+  headingIds?: boolean;
+  /** Keep the GitHub task-list classes. Default true; the spec examples show none. */
+  taskListClasses?: boolean;
 }
 
 /** GitHub-style default schema plus what this app needs. */
@@ -40,6 +59,21 @@ export const sanitiseSchema: Schema = {
     // `align` (table cells) and the task-list checkbox attributes are already in the default
     // schema; `data-line` is ours, for editor/preview scroll sync.
     "*": [...(defaultSchema.attributes?.["*"] ?? []), "dataLine"],
+    // Fenced code: `language-*` (default), `hljs` on highlighted blocks, and the two classes
+    // `remark-math` puts on maths nodes (which the KaTeX step then replaces).
+    code: [["className", /^language-./, "hljs", "math-inline", "math-display"]],
+    // highlight.js token classes only: `hljs-keyword`, and `function_` style sub-scopes.
+    span: [
+      ...(defaultSchema.attributes?.["span"] ?? []),
+      ["className", /^hljs-[a-z_]+$/, /^[a-z]+_+$/],
+    ],
+    // The Mermaid placeholder. Nothing else may carry a class on `pre`.
+    pre: [...(defaultSchema.attributes?.["pre"] ?? []), ["className", MERMAID_CLASS]],
+    // GitHub's class on task-list checkboxes.
+    input: [
+      ...(defaultSchema.attributes?.["input"] ?? []),
+      ["className", "task-list-item-checkbox"],
+    ],
   },
   protocols: {
     ...defaultSchema.protocols,
@@ -128,10 +162,22 @@ function rehypeFragmentLinks() {
     walkElements(tree, (element) => {
       const href = element.properties["href"];
       if (element.tagName === "a" && typeof href === "string" && href.startsWith("#")) {
-        if (ids.has(href.slice(1))) element.properties["href"] = `#${prefix}${href.slice(1)}`;
+        const fragment = href.slice(1);
+        // Non-ASCII ids arrive percent-encoded in the link but plain in the id.
+        if (ids.has(decodeFragment(fragment))) {
+          element.properties["href"] = `#${prefix}${fragment}`;
+        }
       }
     });
   };
+}
+
+function decodeFragment(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
 }
 
 const NEWLINE_MARK = "dataLeadingNewline";
@@ -163,8 +209,28 @@ function rehypeRestoreCodeNewline() {
   };
 }
 
+/** Loads the highlighter only when a fenced block names a language. */
+function rehypeHighlightLazy() {
+  return async (tree: HastRoot) => {
+    let wanted = false;
+    walkElements(tree, (element, parent) => {
+      if (element.tagName !== "code" || parent.type !== "element" || parent.tagName !== "pre") {
+        return;
+      }
+      const classes = element.properties["className"];
+      if (Array.isArray(classes) && classes.some((c) => String(c).startsWith("language-"))) {
+        wanted = true;
+      }
+    });
+    if (!wanted) return;
+    await (await import("./highlight/highlight")).rehypeHighlight()(tree);
+  };
+}
+
 function build(options: PipelineOptions): Processor {
   const { frontmatter = true, gfm = true, dataLines = true, resolveAssets = true } = options;
+  const { math = true, mermaid = true, highlight = true } = options;
+  const { headingIds = true, taskListClasses = true } = options;
   const sanitise = options.sanitise ?? true;
   // The builder chain changes the processor's type at every step; this is the one place that
   // needs it to stay loosely typed.
@@ -172,6 +238,11 @@ function build(options: PipelineOptions): Processor {
   const processor: any = unified().use(remarkParse);
   if (frontmatter) processor.use(remarkFrontmatter, ["yaml"]);
   if (gfm) processor.use(remarkGfm);
+  if (math) {
+    // `remark-math` for `$$`; the single-dollar form has its own rules (see math/dollar.ts).
+    processor.use(remarkMath, { singleDollarTextMath: false });
+    processor.use(remarkDollarMath);
+  }
   processor.use(remarkRehype, {
     allowDangerousHtml: true,
     // The sanitiser adds the `user-content-` prefix to ids; `rehypeFragmentLinks` does the same
@@ -185,8 +256,15 @@ function build(options: PipelineOptions): Processor {
   processor.use(rehypeRestoreCodeNewline);
   if (dataLines) processor.use(rehypeDataLines);
   if (resolveAssets) processor.use(rehypeResolveAssets);
+  if (gfm) processor.use(rehypeTaskListClasses, { keep: taskListClasses });
+  if (headingIds) processor.use(rehypeHeadingIds);
+  if (mermaid) processor.use(rehypeMermaidPlaceholders);
+  if (highlight) processor.use(rehypeHighlightLazy);
   if (sanitise) processor.use(rehypeFragmentLinks);
   if (sanitise) processor.use(rehypeSanitize, sanitiseSchema);
+  // After the sanitiser, on purpose: KaTeX output is sanitised by its own strict schema, which
+  // allows markup (MathML, SVG, inline layout styles) that raw author HTML must never have.
+  if (math) processor.use(rehypeMath);
   processor.use(rehypeStringify, { allowDangerousHtml: !sanitise });
   return processor as Processor;
 }

@@ -47,6 +47,8 @@ export const SETTINGS_SCHEMA = {
   "editor.viewMode": oneOf(["source", "live", "split"], "source"),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
+  "markdown.math": bool(true),
+  "markdown.mermaid": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),
   "files.autoSaveDelayMs": num(1500, 100, 600_000, true),
   "files.recoveryIntervalMs": num(3000, 100, 600_000, true),

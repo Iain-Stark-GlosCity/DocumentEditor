@@ -306,3 +306,173 @@
     outline-color: Highlight;
   }
 }
+
+/* Code highlighting. highlight.js emits classes only; the two palettes are variables, so a theme
+   change needs no re-render. Dark follows data-theme, or the OS before the theme feature runs. */
+.preview {
+  --hl-comment: #5a6472;
+  --hl-keyword: #a626a4;
+  --hl-string: #1a6b35;
+  --hl-number: #9a4a00;
+  --hl-title: #0b5cad;
+  --hl-attr: #8a3b00;
+  --hl-meta: #6a3fa0;
+  --hl-addition: #1a6b35;
+  --hl-deletion: #a3201a;
+  --katex-error-colour: #b3261e;
+}
+
+:root[data-theme="dark"] .preview {
+  --hl-comment: #9aa4b2;
+  --hl-keyword: #e49bf0;
+  --hl-string: #8fd9a0;
+  --hl-number: #f0b27a;
+  --hl-title: #8cc4ff;
+  --hl-attr: #f2a679;
+  --hl-meta: #c3a6f0;
+  --hl-addition: #8fd9a0;
+  --hl-deletion: #ffb4a9;
+  --katex-error-colour: #ffb4a9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .preview {
+    --hl-comment: #9aa4b2;
+    --hl-keyword: #e49bf0;
+    --hl-string: #8fd9a0;
+    --hl-number: #f0b27a;
+    --hl-title: #8cc4ff;
+    --hl-attr: #f2a679;
+    --hl-meta: #c3a6f0;
+    --hl-addition: #8fd9a0;
+    --hl-deletion: #ffb4a9;
+    --katex-error-colour: #ffb4a9;
+  }
+}
+
+.preview-content .hljs-comment,
+.preview-content .hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.preview-content .hljs-keyword,
+.preview-content .hljs-selector-tag,
+.preview-content .hljs-literal,
+.preview-content .hljs-doctag {
+  color: var(--hl-keyword);
+}
+.preview-content .hljs-string,
+.preview-content .hljs-regexp,
+.preview-content .hljs-symbol {
+  color: var(--hl-string);
+}
+.preview-content .hljs-number,
+.preview-content .hljs-variable,
+.preview-content .hljs-template-variable,
+.preview-content .hljs-built_in,
+.preview-content .hljs-type {
+  color: var(--hl-number);
+}
+.preview-content .hljs-title,
+.preview-content .hljs-section,
+.preview-content .hljs-name,
+.preview-content .hljs-selector-id,
+.preview-content .hljs-selector-class {
+  color: var(--hl-title);
+}
+.preview-content .hljs-attr,
+.preview-content .hljs-attribute,
+.preview-content .hljs-property {
+  color: var(--hl-attr);
+}
+.preview-content .hljs-meta,
+.preview-content .hljs-tag,
+.preview-content .hljs-bullet,
+.preview-content .hljs-link {
+  color: var(--hl-meta);
+}
+.preview-content .hljs-addition {
+  color: var(--hl-addition);
+}
+.preview-content .hljs-deletion {
+  color: var(--hl-deletion);
+}
+.preview-content .hljs-emphasis {
+  font-style: italic;
+}
+.preview-content .hljs-strong {
+  font-weight: 700;
+}
+
+/* Maths. KaTeX's own stylesheet is loaded on demand; these are our additions. */
+.preview-content .math-display {
+  margin: 1em 0;
+  overflow-x: auto;
+}
+.preview-content .katex-error,
+.preview-content .katex-error * {
+  color: var(--katex-error-colour);
+}
+
+/* Diagrams */
+.preview-content .mermaid-diagram {
+  margin: 1em 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.preview-content .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.preview-content .mermaid-error {
+  text-align: left;
+}
+.preview-content .mermaid-error-message {
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+  padding: 0.3em 0.6em;
+  border-radius: 0.3em;
+}
+.preview-content pre.mermaid-source {
+  color: var(--fg-muted);
+}
+
+/* Copy button on code blocks. Its text is generated, so it is not part of the code's text. */
+.preview-content pre {
+  position: relative;
+}
+.preview-content .code-copy {
+  position: absolute;
+  top: 0.35em;
+  right: 0.35em;
+  padding: 0.1em 0.6em;
+  font: 0.75em/1.6 var(--font-ui);
+  color: var(--fg);
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+  border-radius: 0.3em;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+}
+.preview-content .code-copy::after {
+  content: "Copy";
+}
+.preview-content .code-copy[data-copied]::after {
+  content: "Copied";
+}
+.preview-content pre:hover > .code-copy,
+.preview-content pre:focus-within > .code-copy,
+.preview-content .code-copy:focus-visible {
+  opacity: 1;
+}
+.preview-content .code-copy:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+@media (forced-colors: active) {
+  .preview-content .code-copy {
+    opacity: 1;
+    border-color: ButtonText;
+  }
+}
