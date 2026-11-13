@@ -23,6 +23,9 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: { target: "es2022" },
+  // The preview's render worker loads the Markdown pipeline with a dynamic import, which needs
+  // an ES-module worker bundle.
+  worker: { format: "es" },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],

@@ -4,6 +4,7 @@ import {
   type FileData,
   type FileFilter,
   type FileFormat,
+  isExternalUrl,
   type Platform,
   type RecoverySnapshot,
 } from "./platform";
@@ -22,6 +23,8 @@ export class MemoryPlatform implements Platform {
   readonly files = new Map<string, StoredFile>();
   readonly recovery = new Map<string, RecoverySnapshot>();
   windowTitle = "";
+  /** URLs passed to `openExternal`, in order. */
+  readonly openedUrls: string[] = [];
   /** What `writeSettings` last stored (tests may set it to simulate an existing file). */
   settingsJson: string | null = null;
 
@@ -141,6 +144,15 @@ export class MemoryPlatform implements Platform {
 
   async writeSettings(json: string): Promise<void> {
     this.settingsJson = json;
+  }
+
+  async openExternal(url: string): Promise<void> {
+    if (!isExternalUrl(url)) throw new Error(`Cannot open ${url}`);
+    this.openedUrls.push(url);
+  }
+
+  assetUrl(absolutePath: string): string {
+    return `memory-asset://files/${encodeURIComponent(absolutePath)}`;
   }
 
   /** Strictly increasing so tests can tell successive writes apart. */

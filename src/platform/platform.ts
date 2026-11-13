@@ -53,6 +53,13 @@ export interface RecoverySnapshot {
   savedMs: number;
 }
 
+/** URL schemes `Platform.openExternal` will hand to the operating system. */
+const EXTERNAL_SCHEMES = /^(https?|mailto):/i;
+
+export function isExternalUrl(url: string): boolean {
+  return EXTERNAL_SCHEMES.test(url.trim());
+}
+
 export interface Platform {
   readFile(path: string): Promise<FileData>;
   /** Atomic: writes a temporary file beside the target, then renames over it. */
@@ -83,4 +90,16 @@ export interface Platform {
   readSettings(): Promise<string | null>;
   /** Atomic: replaces the stored settings JSON. */
   writeSettings(json: string): Promise<void>;
+
+  /**
+   * Opens an http, https or mailto URL in the default application. Rejects any other scheme.
+   * Never navigates the app's own webview.
+   */
+  openExternal(url: string): Promise<void>;
+
+  /**
+   * A URL the webview can load an image from, for an absolute path on disk. Synchronous and pure.
+   * Only files under folders the app has opened or saved are readable through it.
+   */
+  assetUrl(absolutePath: string): string;
 }
