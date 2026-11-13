@@ -67,11 +67,18 @@ describe("menu bar", () => {
       "Zoom inCtrl+=",
       "Zoom outCtrl+-",
       "Reset zoomCtrl+0",
+      "Toggle outlineCtrl+Shift+O",
+      "Go to heading…Ctrl+Alt+O",
+      "Go to next headingAlt+PageDown",
+      "Go to previous headingAlt+PageUp",
       "Theme: follow system",
       "Theme: light",
       "Theme: dark",
       "Toggle split previewAlt+P",
       "Switch focus between editor and previewF6",
+      "Toggle typewriter mode",
+      "Toggle focus mode",
+      "Toggle zen modeCtrl+Alt+Z",
       "Command paletteCtrl+Shift+P",
     ]);
     expect(textsOf("Help")).toEqual(["About DocumentEditor"]);

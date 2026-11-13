@@ -1,0 +1,116 @@
+/* Outline pane, focus mode and zen mode. */
+
+.side-pane[data-side="left"] {
+  flex-shrink: 1;
+  border-inline-end: 1px solid var(--border);
+}
+
+.editor-main {
+  min-width: 20%;
+}
+
+.side-pane[hidden],
+.splitter[hidden] {
+  display: none;
+}
+
+.outline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-chrome);
+}
+
+.outline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.outline-filter {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.outline-button {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.outline-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.outline-button:disabled {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
+.outline-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.outline-item {
+  display: flex;
+  gap: 4px;
+  padding-block: 3px;
+  padding-inline-end: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+}
+
+.outline-item[aria-current="location"] {
+  background: var(--bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.outline-twisty {
+  flex: none;
+  width: 1em;
+  color: var(--fg-muted);
+}
+
+.outline-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-muted);
+}
+
+/* Focus mode: lines outside the current paragraph. Opacity 0.65 keeps body text above 4.5:1
+   against both themes' backgrounds. */
+.cm-focus-dim {
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cm-focus-dim,
+  .cm-line {
+    transition: opacity 0.15s ease;
+  }
+}
+
+/* Zen mode: only the text and the notifications remain. */
+.app--zen .editor-panel {
+  padding-block: 8px;
+}
