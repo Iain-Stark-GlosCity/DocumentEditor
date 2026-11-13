@@ -1,0 +1,116 @@
+/*
+ * The CodeMirror search panel (find, replace, go to line) and match highlights, in the theme
+ * tokens from theme.css. CodeMirror's base theme uses `&light` and `&dark` selectors, which are
+ * more specific than these, so the highlight and panel colours carry !important.
+ */
+
+.cm-editor .cm-panels {
+  background: var(--bg-chrome) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+
+.cm-editor .cm-panels-top {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.cm-editor .cm-panel.cm-search {
+  background: var(--bg-chrome);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  padding: 6px 32px 8px 8px;
+}
+
+.cm-panel.cm-search input[type="text"],
+.cm-panel.cm-search input:not([type]) {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  min-width: 12em;
+}
+
+.cm-panel.cm-search input[type="text"]::placeholder {
+  color: var(--fg-muted);
+}
+
+.cm-panel.cm-search button {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button:hover {
+  background: var(--bg-hover);
+}
+
+/* The close button sits in the top-right corner (CodeMirror positions it absolutely). */
+.cm-panel.cm-search button[name="close"] {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 2px 6px;
+  top: 2px;
+  right: 6px;
+}
+
+.cm-panel.cm-search button[name="close"]:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.cm-panel.cm-search label {
+  color: var(--fg);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.cm-panel.cm-search input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1em;
+  height: 1em;
+  margin: 0 0.3em 0 0;
+  vertical-align: middle;
+}
+
+/* Visible focus for every control in the panel, in both themes. */
+.cm-panel.cm-search input:focus-visible,
+.cm-panel.cm-search button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.cm-editor .cm-searchMatch {
+  background-color: color-mix(in srgb, var(--accent) 25%, transparent) !important;
+  outline: 1px solid var(--accent);
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch.cm-searchMatch-selected {
+  background-color: var(--accent) !important;
+  color: var(--accent-fg) !important;
+}
+
+.cm-editor .cm-selectionMatch {
+  background-color: var(--bg-hover) !important;
+  border-radius: 2px;
+}
+
+.cm-editor .cm-searchMatch .cm-selectionMatch {
+  background-color: transparent !important;
+}
+
+@media (prefers-contrast: more) {
+  .cm-editor .cm-searchMatch {
+    outline-width: 2px;
+  }
+}

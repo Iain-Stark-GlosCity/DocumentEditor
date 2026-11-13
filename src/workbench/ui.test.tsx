@@ -52,6 +52,13 @@ describe("menu bar", () => {
       "CopyCtrl+C",
       "PasteCtrl+V",
       "Select allCtrl+A",
+      "FindCtrl+F",
+      "ReplaceCtrl+H",
+      "Find nextF3",
+      "Find previousShift+F3",
+      "Select next occurrenceCtrl+D",
+      "Select all occurrencesCtrl+Shift+L",
+      "Go to lineCtrl+G",
     ]);
     expect(textsOf("View")).toEqual([
       "Toggle word wrapAlt+Z",
