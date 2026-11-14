@@ -10,6 +10,7 @@ import { markdownProvider } from "./formats/markdown";
 import { jsonProvider } from "./formats/json";
 import { plainTextProvider } from "./formats/plain-text";
 import { htmlProvider } from "./formats/html";
+import { xmlProvider } from "./formats/xml";
 import { yamlProvider } from "./formats/yaml";
 
 export function createRegistry(): FormatRegistry {
@@ -21,5 +22,6 @@ export function createRegistry(): FormatRegistry {
   registry.register(htmlProvider);
   registry.register(jsonProvider);
   registry.register(yamlProvider);
+  registry.register(xmlProvider);
   return registry;
 }
