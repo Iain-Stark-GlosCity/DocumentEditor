@@ -77,6 +77,7 @@ export const recovery: Feature = {
         path: doc.path,
         text: wb.getText(docId) ?? "",
         savedMs: Date.now(),
+        providerId: doc.providerId,
       };
       return queue(docId, async () => {
         await wb.platform.writeRecovery(snapshot);
@@ -97,6 +98,9 @@ export const recovery: Feature = {
     }
 
     let previousDirty = { ...wb.ui.getState().dirty };
+    let previousProviders = new Map(
+      wb.documents.getState().documents.map((d) => [d.id, d.providerId]),
+    );
     const offs: (() => void)[] = [
       wb.onDidChangeText((change) => {
         if (wb.isDirty(change.docId)) schedule(change.docId, true);
@@ -108,6 +112,16 @@ export const recovery: Feature = {
           else if (!dirty && was) void clear(docId);
         }
         previousDirty = { ...state.dirty };
+      }),
+      // Switching a dirty document's format changes nothing in its text, so it needs its own nudge.
+      wb.documents.subscribe((state) => {
+        for (const doc of state.documents) {
+          const before = previousProviders.get(doc.id);
+          if (before !== undefined && before !== doc.providerId && wb.isDirty(doc.id)) {
+            schedule(doc.id, true);
+          }
+        }
+        previousProviders = new Map(state.documents.map((d) => [d.id, d.providerId]));
       }),
       wb.onDidSave((event) => {
         if (wb.isDirty(event.docId)) schedule(event.docId, true);
@@ -244,12 +258,15 @@ async function restoreOne(
   written: Set<string>,
 ): Promise<string | null> {
   const store = wb.documents.getState();
-  // Known limitation: the recovery record has no format field (and the Rust side that stores it
-  // is out of scope), so an untitled snapshot always restores as the default format, even if the
-  // user had switched it with "Change format". Saved files are re-resolved from their path.
-  const provider = snapshot.path
-    ? wb.registry.resolve(snapshot.path)
-    : wb.registry.defaultProvider();
+  // The format the document had when the snapshot was taken, if it is still registered. Snapshots
+  // from older versions have none, and an id that no longer exists is ignored: both fall back to
+  // what the path implies (or the default format for an untitled document). The provider is set
+  // as the document opens, so no format-switch notification fires.
+  const recorded =
+    snapshot.providerId === undefined ? undefined : wb.registry.byId(snapshot.providerId);
+  const provider =
+    recorded ??
+    (snapshot.path ? wb.registry.resolve(snapshot.path) : wb.registry.defaultProvider());
   if (!provider) return null;
 
   let id: string;

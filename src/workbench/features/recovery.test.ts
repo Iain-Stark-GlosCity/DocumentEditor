@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { FileFormat } from "../../platform/platform";
+import type { FileFormat, RecoverySnapshot } from "../../platform/platform";
+import type { TextFormatProvider } from "../../core/format";
+import { FormatRegistry } from "../../core/registry";
 import { MemoryPlatform } from "../../platform/memory";
 import { externalChanges } from "./external-changes";
 import { recovery } from "./recovery";
-import { answerDialog, boot, disposeAll, settle } from "./safety-test-helpers";
+import { Workbench } from "../workbench";
+import { answerDialog, boot, disposeAll, messages, settle } from "./safety-test-helpers";
 
 afterEach(() => {
   disposeAll();
@@ -317,5 +320,120 @@ describe("restoring after a crash", () => {
     });
     await answerDialog(workbench, "restore");
     expect(platform.recovery.size).toBe(0);
+  });
+});
+
+const stub = (id: string, fileExtensions: string[]): TextFormatProvider => ({
+  kind: "text",
+  id,
+  name: id,
+  fileExtensions,
+  viewModes: ["source"],
+  editorExtensions: () => [],
+});
+
+/** Its own registry, so adding a real format cannot change what these tests mean. */
+function formatRegistry(): FormatRegistry {
+  const registry = new FormatRegistry();
+  registry.register(stub("markdown", ["md"]), { default: true });
+  registry.register(stub("text", ["txt"]), { fallback: true });
+  registry.register(stub("json", ["json"]));
+  return registry;
+}
+
+describe("recovering the document's format", () => {
+  const started: Workbench[] = [];
+  afterEach(() => started.splice(0).forEach((w) => w.dispose()));
+
+  async function bootFormats(snapshots: RecoverySnapshot[], files: Record<string, string> = {}) {
+    vi.useFakeTimers();
+    const platform = new MemoryPlatform();
+    for (const [path, text] of Object.entries(files)) platform.seedFile(path, text);
+    for (const snapshot of snapshots) platform.recovery.set(snapshot.id, snapshot);
+    const workbench = new Workbench({
+      platform,
+      registry: formatRegistry(),
+      features: [recovery],
+      settingsSaveDelayMs: 5,
+    });
+    started.push(workbench);
+    workbench.start();
+    await settle(1);
+    return { platform, workbench };
+  }
+
+  async function restore(snapshot: RecoverySnapshot, files: Record<string, string> = {}) {
+    const booted = await bootFormats([snapshot], files);
+    await answerDialog(booted.workbench, "restore");
+    const doc = booted.workbench.documents
+      .getState()
+      .documents.find((d) => d.path === snapshot.path)!;
+    return { ...booted, doc };
+  }
+
+  it("records the current format in every snapshot, including after a switch", async () => {
+    const { platform, workbench } = await bootFormats([]);
+    const id = workbench.activeDocument()!.id;
+    workbench.replaceText(id, "{}");
+    workbench.documents.getState().setProvider(id, "json");
+    await settle(3000);
+    expect([...platform.recovery.values()]).toMatchObject([{ providerId: "json" }]);
+    workbench.documents.getState().setProvider(id, "text");
+    await settle(3000);
+    expect([...platform.recovery.values()]).toMatchObject([{ providerId: "text" }]);
+  });
+
+  it("restores an untitled JSON document as JSON", async () => {
+    const { doc, workbench, platform } = await restore({
+      id: "u",
+      path: null,
+      text: '{"a":1}',
+      savedMs: 1,
+      providerId: "json",
+    });
+    expect(doc.providerId).toBe("json");
+    expect(workbench.getText(doc.id)).toBe('{"a":1}');
+    expect(messages(workbench)).toEqual([]);
+    expect(platform.recovery.has("u")).toBe(true);
+  });
+
+  it("restores a .txt file switched to Markdown as Markdown, and Save keeps it", async () => {
+    const { doc, workbench, platform } = await restore(
+      { id: "t", path: "/n.txt", text: "# hi", savedMs: 1, providerId: "markdown" },
+      { "/n.txt": "old" },
+    );
+    expect(doc.providerId).toBe("markdown");
+    expect(messages(workbench)).toEqual([]);
+    expect(await workbench.save(doc.id)).toBe(true);
+    expect(platform.files.get("/n.txt")?.text).toBe("# hi");
+    const after = workbench.documents.getState().documents.find((d) => d.id === doc.id)!;
+    expect(after.providerId).toBe("markdown");
+    expect(messages(workbench)).toEqual([]);
+  });
+
+  it("restores an old snapshot without a format exactly as before", async () => {
+    const file = await restore(
+      { id: "o1", path: "/n.txt", text: "x", savedMs: 1 },
+      { "/n.txt": "y" },
+    );
+    expect(file.doc.providerId).toBe("text");
+    const untitled = await restore({ id: "o2", path: null, text: "x", savedMs: 1 });
+    expect(untitled.doc.providerId).toBe("markdown");
+  });
+
+  it("falls back safely when the format id is no longer registered", async () => {
+    const file = await restore(
+      { id: "f1", path: "/n.json", text: "[]x", savedMs: 1, providerId: "gone" },
+      { "/n.json": "[]" },
+    );
+    expect(file.doc.providerId).toBe("json");
+    const untitled = await restore({
+      id: "f2",
+      path: null,
+      text: "x",
+      savedMs: 1,
+      providerId: "gone",
+    });
+    expect(untitled.doc.providerId).toBe("markdown");
   });
 });

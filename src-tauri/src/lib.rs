@@ -2,6 +2,7 @@ pub mod assets;
 pub mod atomic;
 pub mod binary;
 pub mod commands;
+pub mod recovery;
 pub mod textfile;
 pub mod watch;
 
