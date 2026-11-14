@@ -108,6 +108,13 @@ export interface FormatCommand {
   title: string;
   /** CodeMirror key notation, for example `Mod-b`. */
   defaultKey?: string;
+  /**
+   * Whether the command applies at the current selection. When it returns false the command is
+   * disabled: menus grey it out and its key is not intercepted, so the key falls through to the
+   * editor's own keymap or the browser. Omit for a command that is always available while a
+   * document of the format is open.
+   */
+  enabled?(state: EditorState): boolean;
   /** Returns true if the command applied. */
   run(view: EditorView): boolean;
 }

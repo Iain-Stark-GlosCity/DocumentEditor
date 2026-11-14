@@ -103,6 +103,15 @@ export function createRenderer(
         retryInThread(pending);
         return;
       }
+      // Any other failure inside the worker (a dependency that needs the DOM, say) is retried
+      // here once, and the worker is not trusted again this session. If the in-thread render
+      // also fails, that error reaches the caller, who keeps the last good render.
+      if (!response.ok && pending?.seq === response.seq) {
+        workerUsable = false;
+        stopWorker();
+        retryInThread(pending);
+        return;
+      }
       settle(response);
     };
     mine.onerror = () => {

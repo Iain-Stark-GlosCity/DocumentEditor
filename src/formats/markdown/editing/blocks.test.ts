@@ -12,7 +12,7 @@ import {
   toggleNumberedList,
   toggleTaskChecked,
   toggleTaskList,
-  toggleTaskOrBlankLine,
+  selectionHasTask,
 } from "./blocks";
 import { markdownFormatCommands } from "./commands";
 import type { EditCommand } from "./syntax";
@@ -133,8 +133,14 @@ describe("toggleTaskChecked outside tasks", () => {
   it("declines", () => {
     expect(run(toggleTaskChecked, "- fo^o").handled).toBe(false);
   });
-  it("Mod-Enter falls back to a blank line below", () => {
-    expect(run(toggleTaskOrBlankLine, "fo^o").out).toBe("foo\n^");
+  it("the Mod-Enter command is enabled only on a task line", () => {
+    const command = markdownFormatCommands.find((c) => c.id === "markdown.toggleTaskChecked")!;
+    expect(command.enabled?.(makeState("- [ ] a^"))).toBe(true);
+    expect(command.enabled?.(makeState("| a |\n|---|\n| b^ |"))).toBe(false);
+  });
+  it("selectionHasTask tells the workbench whether Mod-Enter is ours", () => {
+    expect(selectionHasTask(makeState("- [ ] a^"))).toBe(true);
+    expect(selectionHasTask(makeState("fo^o"))).toBe(false);
   });
 });
 

@@ -46,7 +46,7 @@ export const defaultFeatures: readonly Feature[] = [
   recovery,
   focusMode,
   outline,
-  // Before `preview`: its F6 command supersedes the preview's (see pane-focus.ts).
+  // F6 and Shift+F6 cycle every visible pane (see pane-focus.ts).
   paneFocus,
   preview,
   spellcheck,

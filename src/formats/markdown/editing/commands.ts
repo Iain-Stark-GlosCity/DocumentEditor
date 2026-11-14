@@ -18,7 +18,8 @@ import {
   toggleCodeBlock,
   toggleNumberedList,
   toggleTaskList,
-  toggleTaskOrBlankLine,
+  toggleTaskChecked,
+  selectionHasTask,
 } from "./blocks";
 import {
   toggleBold,
@@ -52,7 +53,12 @@ export const markdownFormatCommands: readonly FormatCommand[] = [
   command("toggleBulletList", "Bulleted list", toggleBulletList, "Mod-Shift-8"),
   command("toggleNumberedList", "Numbered list", toggleNumberedList, "Mod-Shift-7"),
   command("toggleTaskList", "Task list", toggleTaskList, "Mod-Shift-9"),
-  command("toggleTaskChecked", "Mark task done or not done", toggleTaskOrBlankLine, "Mod-Enter"),
+  {
+    // Only on a task line: elsewhere Mod-Enter belongs to the editor (a blank line below, or
+    // "leave the table" inside one), so the key must not be claimed here.
+    ...command("toggleTaskChecked", "Mark task done or not done", toggleTaskChecked, "Mod-Enter"),
+    enabled: selectionHasTask,
+  },
   command("toggleCodeBlock", "Code block", toggleCodeBlock),
   command("insertHorizontalRule", "Horizontal rule", insertHorizontalRule),
   command("indentListItem", "Indent list item", indentListItem),

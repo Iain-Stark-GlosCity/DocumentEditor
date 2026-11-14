@@ -18,15 +18,11 @@ import { currentTheme, DiagramRenderer, isSameDiagram } from "../preview/mermaid
 import { prepareFragment } from "../preview/prepare";
 import { PreviewModel } from "../preview/previewModel";
 import { PreviewScrollSync } from "../preview/scrollSync";
-import type { Workbench } from "../workbench";
 
 /** Whether a format can show a preview in split view. */
 function canSplit(provider: FormatProvider | undefined): boolean {
   return !!provider?.render && provider.viewModes.includes("split");
 }
-
-/** The scrollable preview element of each running workbench, for the focus command. */
-const focusTargets = new WeakMap<Workbench, HTMLElement>();
 
 /** The editor font size is 14 by default; the preview reads comfortably at 16. */
 const PREVIEW_SCALE = 8 / 7;
@@ -67,12 +63,10 @@ function PreviewPane({ workbench }: FeatureComponentProps) {
       workbench.settings.get("preview.syncScroll"),
     );
     syncRef.current = sync;
-    focusTargets.set(workbench, scroller);
     const stop = sync.start();
     return () => {
       stop();
       syncRef.current = null;
-      focusTargets.delete(workbench);
     };
   }, [workbench]);
 
@@ -249,25 +243,9 @@ export const preview: Feature = {
         wb.settings.set("editor.viewMode", "split");
       },
     },
-    {
-      id: "view.cyclePaneFocus",
-      title: "Switch focus between editor and preview",
-      defaultKey: "F6",
-      altKeys: ["Shift-F6"],
-      enabled: () => focusTargets.has(wb),
-      run: () => {
-        const target = focusTargets.get(wb);
-        if (!target) return;
-        if (target.contains(document.activeElement)) wb.focusEditor();
-        else target.focus();
-      },
-    },
   ],
 
-  menuItems: [
-    { menu: "view", group: "4_preview", command: "view.toggleSplitPreview", order: 1 },
-    { menu: "view", group: "4_preview", command: "view.cyclePaneFocus", order: 2 },
-  ],
+  menuItems: [{ menu: "view", group: "4_preview", command: "view.toggleSplitPreview", order: 1 }],
 
   sidePane: {
     id: "preview",

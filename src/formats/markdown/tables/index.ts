@@ -2,12 +2,14 @@
  * First-class GFM table editing in the text buffer. Tables stay plain pipe tables; this adds a
  * keymap that is active only inside a table, the `markdown.table.*` commands and cell paste.
  */
-import { Prec, type Extension } from "@codemirror/state";
+import { Prec, type EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import type { FormatCommand } from "../../../core/format";
 import * as actions from "./actions";
 
-export { findTable } from "./editor";
+import { findTable } from "./editor";
+
+export { findTable };
 export { parseTable, serialiseTable } from "./model";
 
 /**
@@ -48,9 +50,19 @@ export function tableExtensions(autoFormat: () => boolean): Extension[] {
   return [tableKeymap(autoFormat), tablePaste()];
 }
 
-const command = (id: string, title: string, run: (view: EditorView) => boolean): FormatCommand => ({
+/** Is the cursor inside a table? Table commands other than insert and paste need this. */
+const cursorInTable = (state: EditorState): boolean =>
+  findTable(state, state.selection.main.head) !== null;
+
+const command = (
+  id: string,
+  title: string,
+  run: (view: EditorView) => boolean,
+  enabled: FormatCommand["enabled"] | null = cursorInTable,
+): FormatCommand => ({
   id: `markdown.table.${id}`,
   title,
+  ...(enabled ? { enabled } : {}),
   run,
 });
 
@@ -59,7 +71,7 @@ const command = (id: string, title: string, run: (view: EditorView) => boolean):
  * otherwise. Keys for navigation and moving live in `tableKeymap`.
  */
 export const tableCommands: readonly FormatCommand[] = [
-  command("insert", "Insert table", actions.insertTable),
+  command("insert", "Insert table", actions.insertTable, null),
   command("format", "Format table", actions.formatTable),
   command("insertRowAbove", "Insert table row above", (v) => actions.insertRow(v, "above")),
   command("insertRowBelow", "Insert table row below", (v) => actions.insertRow(v, "below")),
@@ -83,12 +95,17 @@ export const tableCommands: readonly FormatCommand[] = [
   command("sortDescending", "Sort table by column, descending", (v) =>
     actions.sortByColumn(v, "desc"),
   ),
-  command("pasteAsTable", "Paste clipboard as table", (view) => {
-    // The Clipboard API is asynchronous; the table is inserted when the text arrives.
-    void navigator.clipboard
-      .readText()
-      .then((text) => actions.pasteTextAsTable(view, text))
-      .catch(() => undefined);
-    return true;
-  }),
+  command(
+    "pasteAsTable",
+    "Paste clipboard as table",
+    (view) => {
+      // The Clipboard API is asynchronous; the table is inserted when the text arrives.
+      void navigator.clipboard
+        .readText()
+        .then((text) => actions.pasteTextAsTable(view, text))
+        .catch(() => undefined);
+      return true;
+    },
+    null,
+  ),
 ];

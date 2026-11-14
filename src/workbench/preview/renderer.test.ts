@@ -146,4 +146,30 @@ describe("rendering in a worker", () => {
     expect(await renderer.render(request("y"))).toBe("in-thread");
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to rendering here, for good, if the worker's render throws", async () => {
+    const worker = new FakeWorker();
+    const create = vi.fn(() => worker);
+    const renderer = createRenderer(unused, { createWorker: create });
+    const result = renderer.render(request("x"));
+    worker.reply({
+      seq: worker.received[0]!.seq,
+      ok: false,
+      message: "document is not defined",
+      unknownProvider: false,
+    });
+    expect(await result).toBe("in-thread");
+    expect(worker.terminated).toBe(true);
+    expect(await renderer.render(request("y"))).toBe("in-thread");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects with the in-thread error when both the worker and this thread fail", async () => {
+    const worker = new FakeWorker();
+    const failing = registryWith(() => Promise.reject(new Error("boom")));
+    const renderer = createRenderer(failing, { createWorker: () => worker });
+    const result = renderer.render(request("x"));
+    worker.reply({ seq: worker.received[0]!.seq, ok: false, message: "w", unknownProvider: false });
+    await expect(result).rejects.toThrow("boom");
+  });
 });
