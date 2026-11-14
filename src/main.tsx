@@ -13,6 +13,7 @@ import "./styles/ribbon.css";
 import "./styles/format-switcher.css";
 import "./styles/csv.css";
 import "./styles/lint.css";
+import "./styles/docx.css";
 import { App } from "./workbench/App";
 
 const registry = createRegistry();

@@ -1,0 +1,28 @@
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import type { TextFormatProvider } from "../../core/format";
+import { docxAnnotations } from "./annotations";
+
+/**
+ * Word documents (DOCX and its macro and template variants), shown as the read-only Formatting
+ * view: Markdown-like text that exposes all of the document's formatting (docs/docx-view.md). The
+ * zip reader and the generator are loaded with `import()` when the first file is decoded, so they
+ * stay out of the startup bundle (CLAUDE.md rule 6). The view is highlighted as Markdown, with
+ * decorations that make the notation read as quiet annotations.
+ */
+export const docxProvider: TextFormatProvider = {
+  kind: "text",
+  id: "docx",
+  name: "Word document",
+  fileExtensions: ["docx", "docm", "dotx", "dotm"],
+  viewModes: ["source"],
+  readOnly: true,
+  spellcheck: false,
+  binary: {
+    archive: "zip",
+    async decode(bytes, context) {
+      const { decodeDocx } = await import("./decode");
+      return decodeDocx(bytes, context);
+    },
+  },
+  editorExtensions: () => [markdown({ base: markdownLanguage, addKeymap: false }), docxAnnotations],
+};
