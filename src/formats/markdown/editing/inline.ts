@@ -137,6 +137,49 @@ type Edit =
   | { kind: "wrap"; from: number; to: number; open: string; close: string }
   | { kind: "pair"; at: number; open: string; close: string };
 
+/** The text a toggle acts on for a range: the range itself, or the word around a bare cursor. */
+function reach(
+  state: EditorState,
+  range: { from: number; to: number; empty: boolean; head: number },
+): { from: number; to: number; wordAt: boolean } {
+  if (range.empty) {
+    const word = state.wordAt(range.head);
+    if (word) return { from: word.from, to: word.to, wordAt: true };
+  }
+  return { from: range.from, to: range.to, wordAt: false };
+}
+
+/**
+ * The constructs of one type (strong text, a link...) that a toggle would remove for this range:
+ * the one around it, or those that together make up the selection. Empty if there is none.
+ */
+function constructsAt(
+  state: EditorState,
+  tree: Tree,
+  name: string,
+  range: { from: number; to: number; empty: boolean; head: number },
+): SyntaxNode[] {
+  const { from, to } = reach(state, range);
+  const found = enclosing(tree, name, from, to);
+  if (found) return [found];
+  return range.empty ? [] : coveredBy(state, tree, name, from, to);
+}
+
+const MAX_ACTIVE_SPAN = 20_000;
+
+/** Is every selection range inside (or entirely made of) the given inline construct? */
+function inlineActive(name: string): (state: EditorState) => boolean {
+  return (state) => {
+    const tree = treeOf(state);
+    return state.selection.ranges.every(
+      // A huge selection is not worth walking the tree for on every cursor move.
+      (range) =>
+        range.to - range.from <= MAX_ACTIVE_SPAN &&
+        constructsAt(state, tree, name, range).length > 0,
+    );
+  };
+}
+
 /** Builds a toggle command for one kind of inline construct. */
 function toggleInline(spec: InlineSpec): EditCommand {
   return (target) => {
@@ -147,23 +190,8 @@ function toggleInline(spec: InlineSpec): EditCommand {
 
     // Pass 1: decide what each range needs.
     const plans = state.selection.ranges.map((range) => {
-      let from = range.from;
-      let to = range.to;
-      let wordAt = false;
-      if (range.empty) {
-        const word = state.wordAt(range.head);
-        if (word) {
-          from = word.from;
-          to = word.to;
-          wordAt = true;
-        }
-      }
-      const found = enclosing(tree, spec.node, from, to);
-      const nodes = found
-        ? [found]
-        : range.empty
-          ? []
-          : coveredBy(state, tree, spec.node, from, to);
+      const { from, to, wordAt } = reach(state, range);
+      const nodes = constructsAt(state, tree, spec.node, range);
       if (nodes.length > 0) {
         for (const node of nodes) {
           for (const d of delimiters(node, spec.mark)) add(`d${d.from}`, { kind: "delete", ...d });
@@ -237,6 +265,13 @@ function toggleInline(spec: InlineSpec): EditCommand {
     return commit(target, { changes, selection });
   };
 }
+
+/** Whether the selection is in bold, italic, struck-through text, inline code or a link. */
+export const boldActive = inlineActive("StrongEmphasis");
+export const italicActive = inlineActive("Emphasis");
+export const strikethroughActive = inlineActive("Strikethrough");
+export const inlineCodeActive = inlineActive("InlineCode");
+export const linkActive = inlineActive("Link");
 
 export const toggleBold = toggleInline({
   node: "StrongEmphasis",

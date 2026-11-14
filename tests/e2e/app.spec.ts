@@ -147,3 +147,33 @@ test("closing a dirty tab asks first", async ({ app }) => {
   await expect(dialog).toHaveCount(0);
   await expect(app.getByRole("tab", { name: /welcome\.md/ })).toBeVisible();
 });
+
+test("the ribbon's Bold button wraps the selection and keeps focus in the editor", async ({
+  app,
+}) => {
+  await setDocument(app, "make this bold");
+  await app.keyboard.press("Home");
+  await app.keyboard.press("Shift+End");
+  const ribbon = app.getByRole("toolbar", { name: "Formatting" });
+  await ribbon.getByRole("button", { name: "Bold" }).click();
+  expect(await documentText(app)).toBe("**make this bold**");
+  await expect(editor(app)).toBeFocused();
+  await expect(ribbon.getByRole("button", { name: "Bold" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("the ribbon's table group appears only when the cursor is in a table", async ({ app }) => {
+  await setDocument(app, "Plain line\n\n| a | b |\n| - | - |\n| 1 | 2 |\n");
+  const tableGroup = app
+    .getByRole("toolbar", { name: "Formatting" })
+    .getByRole("group", { name: "Table" });
+  await app.locator(".cm-line", { hasText: "Plain line" }).click();
+  await expect(tableGroup).toHaveCount(0);
+  await app.locator(".cm-line", { hasText: "| 1" }).click();
+  await expect(tableGroup).toBeVisible();
+  await expect(tableGroup.getByRole("button", { name: "Format table" })).toBeVisible();
+  await app.locator(".cm-line", { hasText: "Plain line" }).click();
+  await expect(tableGroup).toHaveCount(0);
+});

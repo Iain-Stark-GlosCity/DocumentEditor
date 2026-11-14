@@ -14,6 +14,9 @@ function regions(): (HTMLElement | null)[] {
   const area = document.querySelector(".editor-area");
   if (!area) return [];
   const out: (HTMLElement | null)[] = [];
+  // The formatting ribbon, when shown, comes first.
+  const ribbon = document.querySelector<HTMLElement>(".ribbon");
+  if (ribbon) out.push(ribbon);
   for (const child of Array.from(area.children)) {
     if (!(child instanceof HTMLElement) || child.hidden) continue;
     if (child.classList.contains("side-pane")) out.push(child);

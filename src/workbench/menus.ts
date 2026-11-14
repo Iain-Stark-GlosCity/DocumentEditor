@@ -22,12 +22,11 @@ export interface MenuModel {
   groups: MenuEntry[][];
 }
 
-const KNOWN_MENUS = ["file", "edit", "format", "view"];
+const KNOWN_MENUS = ["file", "edit", "view"];
 const LAST_MENU = "help";
 const LABELS: Record<string, string> = {
   file: "File",
   edit: "Edit",
-  format: "Format",
   view: "View",
   help: "Help",
 };

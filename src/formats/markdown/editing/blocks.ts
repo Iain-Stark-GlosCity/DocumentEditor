@@ -104,6 +104,26 @@ export function setHeading(level: 1 | 2 | 3 | 4 | 5 | 6): EditCommand {
   };
 }
 
+/**
+ * The heading level (1 to 6) of the line at the cursor, or 0 for any other block. Setext
+ * headings count; so does a heading inside a list or quote.
+ */
+export function headingLevelAt(state: EditorState): number {
+  const line = state.doc.lineAt(state.selection.main.head);
+  const parsed = parseLine(line.text);
+  const start = line.from + parsed.markerStart;
+  if (codeBlockAt(state, start)) return 0;
+  const setext = findAncestor(treeOf(state).resolveInner(start, 1), [
+    "SetextHeading1",
+    "SetextHeading2",
+  ]);
+  if (setext) return setext.name === "SetextHeading1" ? 1 : 2;
+  return levelOf(line.text, parsed);
+}
+
+export const headingActive = (level: number) => (state: EditorState) =>
+  headingLevelAt(state) === level;
+
 export const setParagraph: EditCommand = (target) =>
   applyLineChanges(
     target,
@@ -124,11 +144,16 @@ export const decreaseHeading: EditCommand = (target) =>
 
 const QUOTE = /^([ \t]{0,3})>[ ]?/;
 
+/** Is every non-blank selected line quoted? */
+export function selectionQuoted(state: EditorState, lines = selectedLines(state)): boolean {
+  const content = lines.filter((l) => !isBlank(l.text));
+  return content.length > 0 && content.every((l) => QUOTE.test(l.text));
+}
+
 export const toggleBlockquote: EditCommand = (target) => {
   const { state } = target;
   const lines = selectedLines(state);
-  const content = lines.filter((l) => !isBlank(l.text));
-  const quoted = content.length > 0 && content.every((l) => QUOTE.test(l.text));
+  const quoted = selectionQuoted(state, lines);
   const changes: ChangeSpec[] = [];
   for (const line of lines) {
     if (quoted) {
@@ -150,6 +175,16 @@ function markerFor(kind: ListTarget, parsed: ParsedLine, number: number, bullet 
   if (kind === "ordered") return `${number}${parsed.kind === "ordered" ? parsed.delimiter : "."} `;
   return kind === "task" ? `${bullet} [ ] ` : `${bullet} `;
 }
+
+/** Is every non-blank selected line an item of this kind of list? */
+function selectionIsList(state: EditorState, kind: ListTarget): boolean {
+  const lines = selectedLines(state).filter((l) => !isBlank(l.text));
+  return lines.length > 0 && lines.every((l) => parseLine(l.text).kind === kind);
+}
+
+export const bulletListActive = (state: EditorState) => selectionIsList(state, "bullet");
+export const numberedListActive = (state: EditorState) => selectionIsList(state, "ordered");
+export const taskListActive = (state: EditorState) => selectionIsList(state, "task");
 
 function toggleList(kind: ListTarget): EditCommand {
   return (target) => {
@@ -236,12 +271,9 @@ function longestRun(text: string, char: string): number {
 
 const FENCE_LINE = /^([ \t]{0,3})(`{3,}|~{3,})/;
 
-/** Wraps the selected lines in a fence longer than any backtick run inside, or removes the fence. */
-export const toggleCodeBlock: EditCommand = (target) => {
-  const { state } = target;
+/** The fenced code blocks that the ends of the selection ranges are in, by start offset. */
+function fencedBlocksAt(state: EditorState): Map<number, ReturnType<typeof findAncestor>> {
   const tree = treeOf(state);
-
-  // Inside a fenced block: remove its fences.
   const blocks = new Map<number, ReturnType<typeof findAncestor>>();
   for (const range of state.selection.ranges) {
     for (const pos of [range.from, range.to]) {
@@ -249,6 +281,18 @@ export const toggleCodeBlock: EditCommand = (target) => {
       if (block) blocks.set(block.from, block);
     }
   }
+  return blocks;
+}
+
+/** Is the selection in a fenced code block? */
+export const codeBlockActive = (state: EditorState): boolean => fencedBlocksAt(state).size > 0;
+
+/** Wraps the selected lines in a fence longer than any backtick run inside, or removes the fence. */
+export const toggleCodeBlock: EditCommand = (target) => {
+  const { state } = target;
+
+  // Inside a fenced block: remove its fences.
+  const blocks = fencedBlocksAt(state);
   if (blocks.size > 0) {
     const changes: ChangeSpec[] = [];
     for (const block of blocks.values()) {

@@ -9,6 +9,7 @@ import "./styles/search.css";
 import "./styles/preview.css";
 import "./styles/outline.css";
 import "./styles/live.css";
+import "./styles/ribbon.css";
 import { App } from "./workbench/App";
 
 const registry = createRegistry();

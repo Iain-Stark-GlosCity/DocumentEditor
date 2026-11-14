@@ -66,6 +66,7 @@ describe("menu bar", () => {
     expect(textsOf("View")).toEqual([
       "Word wrapAlt+Z",
       "Line numbers",
+      "Ribbon",
       "Zoom inCtrl+=",
       "Zoom outCtrl+-",
       "Reset zoomCtrl+0",
