@@ -1,3 +1,5 @@
+import type { FormatRegistry } from "../core/registry";
+import { ContainerPlatform } from "./containers";
 import { MemoryPlatform } from "./memory";
 import type { Platform } from "./platform";
 import { TauriPlatform } from "./tauri";
@@ -21,6 +23,8 @@ declare global {
   interface Window {
     /** The in-memory platform of the browser-only build, so browser tests can open other files. */
     __demoPlatform?: MemoryPlatform;
+    /** The format registry of the browser-only build, so browser tests can register a test format. */
+    __demoRegistry?: FormatRegistry;
   }
 }
 
@@ -30,11 +34,15 @@ function insideTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-/** TauriPlatform inside the desktop app, otherwise a MemoryPlatform seeded with a sample. */
-export function getPlatform(): Platform {
+/**
+ * TauriPlatform inside the desktop app, otherwise a MemoryPlatform seeded with a sample, either
+ * wrapped in the ContainerPlatform so paths into container files (`report.docx!/word/document.xml`)
+ * work. `window.__demoPlatform` stays the inner MemoryPlatform.
+ */
+export function getPlatform(registry: FormatRegistry): Platform {
   if (cached) return cached;
   if (insideTauri()) {
-    cached = new TauriPlatform();
+    cached = new ContainerPlatform(new TauriPlatform(), registry);
   } else {
     const memory = new MemoryPlatform();
     memory.seedFile(SAMPLE_PATH, SAMPLE_TEXT, {
@@ -45,8 +53,11 @@ export function getPlatform(): Platform {
     });
     memory.requestOpen([SAMPLE_PATH]);
     // Only the browser-only build has this; the desktop app never sets it.
-    if (typeof window !== "undefined") window.__demoPlatform = memory;
-    cached = memory;
+    if (typeof window !== "undefined") {
+      window.__demoPlatform = memory;
+      window.__demoRegistry = registry;
+    }
+    cached = new ContainerPlatform(memory, registry);
   }
   return cached;
 }
