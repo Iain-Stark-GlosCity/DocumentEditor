@@ -14,6 +14,10 @@ async function start() {
 }
 
 const menuItem = (name: string | RegExp) => screen.getByRole("menuitem", { name });
+/** Every item of one menu, whatever its kind (item, checkbox or radio). */
+const itemsIn = (menu: HTMLElement) => [
+  ...menu.querySelectorAll<HTMLElement>(':scope > li > [role^="menuitem"]'),
+];
 
 describe("menu bar", () => {
   it("has the four menus with the expected File items and shown keybindings", async () => {
@@ -24,15 +28,13 @@ describe("menu bar", () => {
 
     fireEvent.click(menuItem("File"));
     const menu = screen.getByRole("menu", { name: "File" });
-    const labels = within(menu)
-      .getAllByRole("menuitem")
-      .map((i) => i.textContent);
+    const labels = itemsIn(menu).map((i) => i.textContent);
     expect(labels).toEqual([
       "New fileCtrl+N",
       "Open file…Ctrl+O",
       "SaveCtrl+S",
       "Save as…Ctrl+Shift+S",
-      "Autosave: off",
+      "Autosave",
       "Close tabCtrl+W",
     ]);
     expect(menuItem("File").getAttribute("aria-expanded")).toBe("true");
@@ -42,9 +44,7 @@ describe("menu bar", () => {
     await start();
     const textsOf = (top: string) => {
       fireEvent.click(menuItem(top));
-      return within(screen.getByRole("menu", { name: top }))
-        .getAllByRole("menuitem")
-        .map((i) => i.textContent);
+      return itemsIn(screen.getByRole("menu", { name: top })).map((i) => i.textContent);
     };
     expect(textsOf("Edit")).toEqual([
       "UndoCtrl+Z",
@@ -60,32 +60,28 @@ describe("menu bar", () => {
       "Select next occurrenceCtrl+D",
       "Select all occurrencesCtrl+Shift+L",
       "Go to lineCtrl+G",
-      "Toggle spellcheck",
+      "Spellcheck",
       "Insert image…",
     ]);
     expect(textsOf("View")).toEqual([
-      "Toggle word wrapAlt+Z",
-      "Toggle line numbers",
+      "Word wrapAlt+Z",
+      "Line numbers",
       "Zoom inCtrl+=",
       "Zoom outCtrl+-",
       "Reset zoomCtrl+0",
-      "Toggle outlineCtrl+Shift+O",
+      "OutlineCtrl+Shift+O",
       "Go to heading…Ctrl+Alt+O",
       "Go to next headingAlt+PageDown",
       "Go to previous headingAlt+PageUp",
-      "Theme: follow system",
-      "Theme: light",
-      "Theme: dark",
-      "Source mode (current)",
-      "Live preview mode",
-      "Cycle view mode (now source)Alt+M",
-      "Toggle split previewAlt+P",
+      "Theme›",
+      "View mode›",
+      "Split previewAlt+P",
       "Switch focus between editor and previewF6",
-      "Toggle typewriter mode",
-      "Toggle focus mode",
-      "Toggle zen modeCtrl+Alt+Z",
+      "Typewriter mode",
+      "Focus mode",
+      "Zen modeCtrl+Alt+Z",
       "Command paletteCtrl+Shift+P",
-      "Toggle word count",
+      "Word count",
     ]);
     expect(textsOf("Help")).toEqual(["About DocumentEditor"]);
   });
@@ -159,11 +155,44 @@ describe("menu bar", () => {
   it("changes settings from the View menu", async () => {
     const { workbench } = await start();
     fireEvent.click(menuItem("View"));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Toggle line numbers/ }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /^Line numbers/ }));
     expect(workbench.settings.get("editor.lineNumbers")).toBe(true);
     fireEvent.click(menuItem("View"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Zoom in/ }));
     expect(workbench.settings.get("editor.fontSize")).toBe(15);
+  });
+
+  it("shows toggles and choices as checked items, with choices in submenus", async () => {
+    const { workbench } = await start();
+    fireEvent.click(menuItem("View"));
+    const wrap = screen.getByRole("menuitemcheckbox", { name: /^Word wrap/ });
+    expect(wrap.getAttribute("aria-checked")).toBe("true");
+    expect(
+      screen.getByRole("menuitemcheckbox", { name: /^Line numbers/ }).getAttribute("aria-checked"),
+    ).toBe("false");
+
+    const theme = menuItem("Theme");
+    expect(theme.getAttribute("aria-haspopup")).toBe("menu");
+    theme.focus();
+    fireEvent.keyDown(theme, { key: "ArrowRight" });
+    const sub = screen.getByRole("menu", { name: "Theme" });
+    const radios = within(sub).getAllByRole("menuitemradio");
+    expect(radios.map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual([
+      ["Follow system", "true"],
+      ["Light", "false"],
+      ["Dark", "false"],
+    ]);
+    await waitFor(() => expect(document.activeElement).toBe(radios[0]));
+    fireEvent.keyDown(sub, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(radios[1]);
+    fireEvent.keyDown(sub, { key: "ArrowLeft" });
+    expect(screen.queryByRole("menu", { name: "Theme" })).toBeNull();
+    expect(document.activeElement).toBe(menuItem("Theme"));
+    expect(screen.getByRole("menu", { name: "View" })).toBeTruthy();
+
+    fireEvent.click(menuItem("Theme"));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Dark" }));
+    expect(workbench.settings.get("appearance.theme")).toBe("dark");
   });
 
   it("shows an About dialog", async () => {

@@ -4,6 +4,7 @@ import { createRegistry } from "./create-registry";
 import { getPlatform } from "./platform";
 import "./styles/theme.css";
 import "./styles/app.css";
+import "./styles/syntax.css";
 import "./styles/search.css";
 import "./styles/preview.css";
 import "./styles/outline.css";

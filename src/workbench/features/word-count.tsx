@@ -106,5 +106,13 @@ export const wordCount: Feature = {
       run: () => wb.settings.set("statusBar.wordCount", !wb.settings.get("statusBar.wordCount")),
     },
   ],
-  menuItems: [{ menu: "view", group: "9_status", command: "view.toggleWordCount" }],
+  menuItems: [
+    {
+      menu: "view",
+      group: "9_status",
+      command: "view.toggleWordCount",
+      label: "Word count",
+      checked: (wb) => wb.settings.get("statusBar.wordCount"),
+    },
+  ],
 };

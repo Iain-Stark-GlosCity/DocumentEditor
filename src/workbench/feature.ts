@@ -40,6 +40,18 @@ export interface MenuItem {
   order?: number;
   /** Overrides the command title in the menu. */
   label?: string;
+  /**
+   * Makes the item a toggle (or, with `radio`, one of a group of choices) and says whether it is
+   * on. Shown as a tick, with `aria-checked`. Read each time the menu opens.
+   */
+  checked?(workbench: Workbench): boolean;
+  /** With `checked`: the item is a radio choice rather than an independent toggle. */
+  radio?: boolean;
+  /**
+   * Puts the item in a submenu with this label. Items of one group with the same name share it;
+   * the submenu sits where its first item would.
+   */
+  submenu?: string;
 }
 
 /** A pane beside the editor, in a resizable two-pane layout. */

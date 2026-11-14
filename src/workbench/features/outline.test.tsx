@@ -31,7 +31,7 @@ describe("the outline pane", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: "Outline" })).toBeNull());
 
     fireEvent.click(screen.getByRole("menuitem", { name: "View" }));
-    expect(await screen.findByRole("menuitem", { name: /Toggle outline/ })).toBeTruthy();
+    expect(await screen.findByRole("menuitemcheckbox", { name: /Outline/ })).toBeTruthy();
   });
 
   it("shows the headings as a tree with levels, set positions and expanded state", async () => {

@@ -265,7 +265,14 @@ export const preview: Feature = {
   ],
 
   menuItems: [
-    { menu: "view", group: "4_preview", command: "view.toggleSplitPreview", order: 1 },
+    {
+      menu: "view",
+      group: "4_preview",
+      command: "view.toggleSplitPreview",
+      order: 1,
+      label: "Split preview",
+      checked: (wb) => wb.settings.get("editor.viewMode") === "split",
+    },
     { menu: "view", group: "4_preview", command: "view.cyclePaneFocus", order: 2 },
   ],
 

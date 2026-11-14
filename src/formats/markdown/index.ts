@@ -1,5 +1,6 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { TextFormatProvider } from "../../core/format";
+import { sourceStyle } from "./source-style";
 import { markdownEditing, markdownFormatCommands } from "./editing";
 import { markdownImage, markdownLink } from "./images";
 import { liveCommands, markdownViewExtensions } from "./live";
@@ -36,6 +37,7 @@ export const markdownProvider: TextFormatProvider = {
     // Tables bind Tab and Enter at high precedence and decline outside a table.
     ...tableExtensions(() => context.setting("markdown.tables.autoFormat", true)),
     markdownEditing(context.setting),
+    sourceStyle,
   ],
   async render(text, context) {
     return (await loadPipeline()).renderMarkdown(text, context);

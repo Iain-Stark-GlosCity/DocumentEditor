@@ -59,12 +59,17 @@ describe("switching view mode", () => {
     const { workbench } = await setup();
     act(() => workbench.settings.set("editor.viewMode", "live"));
     fireEvent.click(screen.getByRole("menuitem", { name: "View" }));
-    const menu = screen.getByRole("menu", { name: "View" });
+    fireEvent.click(within(screen.getByRole("menu", { name: "View" })).getByText("View mode"));
+    const menu = screen.getByRole("menu", { name: "View mode" });
     expect(
-      within(menu).getByRole("menuitem", { name: "Live preview mode (current)" }),
-    ).toBeTruthy();
-    expect(within(menu).getByRole("menuitem", { name: "Source mode" })).toBeTruthy();
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Source mode" }));
+      within(menu)
+        .getByRole("menuitemradio", { name: "Live preview" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(
+      within(menu).getByRole("menuitemradio", { name: "Source" }).getAttribute("aria-checked"),
+    ).toBe("false");
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Source" }));
     await waitFor(() => expect(workbench.settings.get("editor.viewMode")).toBe("source"));
   });
 

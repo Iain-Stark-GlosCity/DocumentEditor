@@ -6,6 +6,37 @@ import type { Workbench } from "./workbench";
 
 type Pending = "first" | "last" | null;
 
+const ITEM = '[role^="menuitem"]:not([aria-disabled="true"])';
+
+/** Items of one menu, not those of a submenu nested inside it. */
+function itemsOf(menu: Element | null | undefined): HTMLButtonElement[] {
+  return [...(menu?.querySelectorAll<HTMLButtonElement>(`:scope > li > ${ITEM}`) ?? [])];
+}
+
+/** A group's entries, with consecutive entries of the same submenu gathered into one node. */
+type MenuNode = { entry: MenuEntry } | { submenu: string; entries: MenuEntry[] };
+
+function nodesOf(group: readonly MenuEntry[]): MenuNode[] {
+  const nodes: MenuNode[] = [];
+  for (const entry of group) {
+    const last = nodes[nodes.length - 1];
+    if (!entry.submenu) nodes.push({ entry });
+    else if (last && "submenu" in last && last.submenu === entry.submenu) last.entries.push(entry);
+    else nodes.push({ submenu: entry.submenu, entries: [entry] });
+  }
+  return nodes;
+}
+
+function Tick({ radio }: { radio: boolean }) {
+  return radio ? (
+    <span className="menu-dot" />
+  ) : (
+    <svg className="menu-tick" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 /**
  * In-app menu bar (ARIA menubar pattern). Alt or F10 focuses it; arrows move, Enter or Space
  * activates, Escape closes and returns focus to where it was.
@@ -28,6 +59,9 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
   const returnFocus = useRef<HTMLElement | null>(null);
   const pending = useRef<Pending>(null);
   const topRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [subOpen, setSubOpen] = useState<string | null>(null);
+  const subAnchor = useRef<DOMRect | null>(null);
+  const subPending = useRef(false);
 
   const index = Math.min(topIndex, Math.max(0, menus.length - 1));
 
@@ -55,17 +89,37 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
     remember();
     setTopIndex(i);
     pending.current = focus;
+    setSubOpen(null);
     setOpenId(menus[i]?.id ?? null);
     if (focus === null) topRefs.current[i]?.focus();
   }
 
   function itemButtons(): HTMLButtonElement[] {
-    return [
-      ...(bar.current?.querySelectorAll<HTMLButtonElement>(
-        '[role="menu"] [role="menuitem"]:not([aria-disabled="true"])',
-      ) ?? []),
-    ];
+    return itemsOf(bar.current?.querySelector(".menu-wrap > [role='menu']"));
   }
+
+  function openSub(button: HTMLElement, key: string, focus: boolean) {
+    subAnchor.current = button.getBoundingClientRect();
+    subPending.current = focus;
+    setSubOpen(key);
+  }
+
+  // Keeps a submenu on screen: beside its parent, flipped or nudged up when short of room.
+  function placeSub(el: HTMLUListElement | null) {
+    const anchor = subAnchor.current;
+    if (!el || !anchor) return;
+    const room = window.innerWidth - anchor.right;
+    const left = room >= el.offsetWidth ? anchor.right - 2 : anchor.left - el.offsetWidth + 2;
+    el.style.left = `${Math.max(0, left)}px`;
+    el.style.top = `${Math.max(4, Math.min(anchor.top - 5, window.innerHeight - el.offsetHeight - 4))}px`;
+  }
+
+  // Move focus into a submenu that was opened from the keyboard.
+  useEffect(() => {
+    if (subOpen === null || !subPending.current) return;
+    subPending.current = false;
+    itemsOf(bar.current?.querySelector("[role='menu'] [role='menu']"))[0]?.focus();
+  }, [subOpen]);
 
   // Move focus into a menu that was just opened from the keyboard.
   useEffect(() => {
@@ -133,6 +187,7 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
   function activate(entry: MenuEntry) {
     if (entry.command.enabled && !entry.command.enabled()) return;
     // Restore focus first: edit commands act on the focused editor.
+    setSubOpen(null);
     leave();
     void workbench.runCommand(entry.command.id);
   }
@@ -177,7 +232,11 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
       event.preventDefault();
       items[(to + items.length) % items.length]?.focus();
     };
-    if (key === "ArrowDown") move(at + 1);
+    const current = items[at];
+    if (key === "ArrowRight" && current?.getAttribute("aria-haspopup") === "menu") {
+      event.preventDefault();
+      openSub(current, current.dataset.label ?? "", true);
+    } else if (key === "ArrowDown") move(at + 1);
     else if (key === "ArrowUp") move(at < 0 ? items.length - 1 : at - 1);
     else if (key === "Home") move(0);
     else if (key === "End") move(items.length - 1);
@@ -205,6 +264,67 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
         hit.focus();
       }
     }
+  }
+
+  function onSubKeyDown(event: KeyboardEvent<HTMLUListElement>) {
+    // Everything a submenu handles stays there; the menu around it must not also react.
+    const key = event.key;
+    const menu = event.currentTarget;
+    const items = itemsOf(menu);
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const move = (to: number) => items[(to + items.length) % items.length]?.focus();
+    const handled = (fn: () => void) => {
+      event.preventDefault();
+      event.stopPropagation();
+      fn();
+    };
+    const closeSub = () => {
+      const parent = menu.parentElement?.querySelector<HTMLElement>(":scope > button");
+      setSubOpen(null);
+      parent?.focus();
+    };
+    if (key === "ArrowDown") handled(() => move(at + 1));
+    else if (key === "ArrowUp") handled(() => move(at < 0 ? items.length - 1 : at - 1));
+    else if (key === "Home") handled(() => move(0));
+    else if (key === "End") handled(() => move(items.length - 1));
+    else if (key === "ArrowLeft" || key === "Escape") handled(closeSub);
+    else if (key === "ArrowRight") handled(() => {});
+    else if (key === "Enter" || key === " ") {
+      handled(() => (document.activeElement as HTMLButtonElement | null)?.click());
+    } else if (key === "Tab") {
+      setSubOpen(null);
+      setOpenId(null);
+      returnFocus.current = null;
+    }
+  }
+
+  function renderEntry(entry: MenuEntry) {
+    const enabled = entry.command.enabled ? entry.command.enabled() : true;
+    const checked = entry.checked ? entry.checked(workbench) : undefined;
+    const role =
+      checked === undefined ? "menuitem" : entry.radio ? "menuitemradio" : "menuitemcheckbox";
+    return (
+      <li key={entry.command.id} role="none">
+        <button
+          type="button"
+          role={role}
+          className="menu-item"
+          tabIndex={-1}
+          data-label={entry.label}
+          aria-disabled={!enabled}
+          aria-checked={checked}
+          aria-keyshortcuts={entry.keys ?? undefined}
+          onClick={() => activate(entry)}
+          onPointerEnter={() => setSubOpen(null)}
+        >
+          <span className="menu-check" aria-hidden="true">
+            {checked && <Tick radio={!!entry.radio} />}
+          </span>
+          <span className="menu-label">{entry.label}</span>
+          {entry.keys && <span className="menu-keys">{entry.keys}</span>}
+        </button>
+      </li>
+    );
   }
 
   return (
@@ -250,23 +370,40 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
                   g > 0 ? (
                     <li key={`sep-${g}`} role="separator" className="menu-separator" />
                   ) : null,
-                  ...group.map((entry) => {
-                    const enabled = entry.command.enabled ? entry.command.enabled() : true;
+                  ...nodesOf(group).map((node) => {
+                    if ("entry" in node) return renderEntry(node.entry);
+                    const key = node.submenu;
+                    const open = subOpen === key;
                     return (
-                      <li key={entry.command.id} role="none">
+                      <li key={`sub-${key}`} role="none">
                         <button
                           type="button"
                           role="menuitem"
                           className="menu-item"
                           tabIndex={-1}
-                          data-label={entry.label}
-                          aria-disabled={!enabled}
-                          aria-keyshortcuts={entry.keys ?? undefined}
-                          onClick={() => activate(entry)}
+                          data-label={key}
+                          aria-haspopup="menu"
+                          aria-expanded={open}
+                          onClick={(e) => openSub(e.currentTarget, key, true)}
+                          onPointerEnter={(e) => openSub(e.currentTarget, key, false)}
                         >
-                          <span>{entry.label}</span>
-                          {entry.keys && <span className="menu-keys">{entry.keys}</span>}
+                          <span className="menu-check" aria-hidden="true" />
+                          <span className="menu-label">{key}</span>
+                          <span className="menu-chevron" aria-hidden="true">
+                            ›
+                          </span>
                         </button>
+                        {open && (
+                          <ul
+                            role="menu"
+                            className="menu menu-sub"
+                            aria-label={key}
+                            ref={placeSub}
+                            onKeyDown={onSubKeyDown}
+                          >
+                            {node.entries.map(renderEntry)}
+                          </ul>
+                        )}
                       </li>
                     );
                   }),

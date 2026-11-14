@@ -9,9 +9,36 @@
   --live-quote-step: 1em;
 }
 
-/* Prose reads better in the UI font; code stays monospace. */
+/* Prose reads better in a proportional font; code stays monospace. */
 .editor-host .cm-live .cm-scroller {
-  font-family: var(--font-ui);
+  font-family: var(--font-prose);
+  line-height: 1.7;
+}
+
+.editor-host .cm-live .cm-content {
+  padding-top: 24px;
+}
+
+/* The source highlighter's weights and sizes belong to source mode; live mode sets its own. */
+.cm-live .tok-h1,
+.cm-live .tok-h2,
+.cm-live .tok-h3,
+.cm-live .tok-h {
+  font-size: inherit;
+  color: inherit;
+}
+
+.cm-live .tok-code {
+  background: none;
+}
+
+.cm-live .tok-link,
+.cm-live .tok-url {
+  color: inherit;
+}
+
+.cm-live .tok-marker {
+  color: var(--syn-marker);
 }
 
 /* Dimmed markers of a revealed construct. */
@@ -41,7 +68,7 @@
 }
 
 .cm-live .cm-live-link {
-  color: var(--accent);
+  color: var(--syn-link);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -50,29 +77,35 @@
 .cm-live .cm-live-heading {
   font-weight: 650;
   line-height: 1.3;
+  color: var(--syn-heading);
+  text-decoration: none;
+  padding-bottom: 0.15em;
 }
 
 .cm-live .cm-live-h1 {
-  font-size: 1.75em;
-  padding-top: 0.4em;
+  font-size: 1.85em;
+  font-weight: 700;
+  padding-top: 0.7em;
 }
 
 .cm-live .cm-live-h2 {
-  font-size: 1.45em;
-  padding-top: 0.3em;
+  font-size: 1.5em;
+  padding-top: 0.7em;
 }
 
 .cm-live .cm-live-h3 {
   font-size: 1.25em;
-  padding-top: 0.2em;
+  padding-top: 0.55em;
 }
 
 .cm-live .cm-live-h4 {
   font-size: 1.1em;
+  padding-top: 0.4em;
 }
 
 .cm-live .cm-live-h5 {
   font-size: 1em;
+  padding-top: 0.3em;
 }
 
 .cm-live .cm-live-h6 {
@@ -135,7 +168,8 @@
 }
 
 .cm-live .cm-live-list-number {
-  color: var(--fg-muted);
+  color: var(--syn-marker);
+  font-variant-numeric: tabular-nums;
 }
 
 .cm-live .cm-live-task {
@@ -154,6 +188,7 @@
 
 .cm-live .cm-live-task-done {
   color: var(--fg-muted);
+  text-decoration-thickness: 1px;
   text-decoration: line-through;
 }
 
@@ -183,7 +218,7 @@
 }
 
 .cm-live .cm-live-fence-dim {
-  color: var(--fg-muted);
+  color: var(--syn-marker);
 }
 
 .cm-live .cm-live-code-lang {
@@ -192,11 +227,43 @@
   color: var(--fg-muted);
 }
 
+.cm-live .cm-live-code-lang span,
+.cm-live span.cm-live-code-lang span {
+  color: var(--fg-muted);
+}
+
+/* Left as written for now: tables, raw HTML, reference definitions. Monospace keeps table
+   columns lined up. */
+.cm-live .cm-live-source-block {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.cm-live .cm-live-source-block .tok-marker {
+  color: var(--syn-marker);
+}
+
+.cm-live .cm-live-source-block .tok-h {
+  font-weight: 600;
+}
+
+/* Inline maths and footnote markers, until they are rendered. */
+.cm-live .cm-live-maths,
+.cm-live .cm-live-footnote {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--syn-code);
+  background: var(--live-subtle);
+  border-radius: 3px;
+  padding: 0 0.15em;
+}
+
 /* Front matter: shown as written, quieter. */
 .cm-live .cm-live-frontmatter {
   font-family: var(--font-mono);
   font-size: 0.92em;
-  color: var(--fg-muted);
+  color: var(--syn-meta);
 }
 
 /* Images */
@@ -251,6 +318,8 @@
     border-left: 3px solid CanvasText;
   }
 
+  .cm-live .cm-live-maths,
+  .cm-live .cm-live-footnote,
   .cm-live .cm-live-codeblock,
   .cm-live .cm-live-inline-code {
     outline: 1px solid CanvasText;

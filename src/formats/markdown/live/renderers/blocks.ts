@@ -135,7 +135,12 @@ export const task: LiveRenderer = {
     const checked = state === "x" || state === "X";
     const lineEnd = doc.lineAt(marker.to).to;
     const text = doc.sliceString(marker.to, Math.min(n.to, lineEnd)).trim();
-    if (checked) out.mark(marker.to, n.to, "cm-live-task-done");
+    if (checked) {
+      // Strike the text, not the space between the box and it.
+      let start = marker.to;
+      while (start < n.to && /[ \t]/.test(doc.sliceString(start, start + 1))) start++;
+      out.mark(start, n.to, "cm-live-task-done");
+    }
     if (out.touches(listMark.from, marker.to)) {
       out.mark(marker.from, marker.to, SYNTAX);
       return;
@@ -199,6 +204,10 @@ export const indentedCode: LiveRenderer = {
 export const leftAsSource: LiveRenderer = {
   id: "left-as-source",
   nodes: ["Table", "HTMLBlock", "CommentBlock", "ProcessingInstructionBlock", "LinkReference"],
-  decorate: () => false,
+  // Shown as written, so the lines get the source look (monospace) instead of body text.
+  decorate(n, out) {
+    out.linesClass(n.from, n.to, "cm-live-source-block");
+    return false;
+  },
   decorateBlock: () => false,
 };

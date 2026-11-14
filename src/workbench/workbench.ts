@@ -4,7 +4,7 @@
  * (see `App.tsx`); features extend it (see `feature.ts`).
  */
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { editorHighlighting } from "./editor-highlight";
 import {
   Compartment,
   EditorState,
@@ -147,7 +147,7 @@ const baseExtensions: Extension[] = [
   drawSelection(),
   // The buffer is always `\n`; a lone `\r` must stay part of the text (CLAUDE.md rule 1).
   EditorState.lineSeparator.of("\n"),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  editorHighlighting,
   keymap.of([...defaultKeymap, ...historyKeymap]),
   EditorView.contentAttributes.of({ "aria-label": "Document text" }),
 ];

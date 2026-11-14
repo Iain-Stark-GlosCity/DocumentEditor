@@ -514,7 +514,14 @@ export const outline: Feature = {
   ],
 
   menuItems: [
-    { menu: "view", group: "3_outline", command: "view.toggleOutline", order: 1 },
+    {
+      menu: "view",
+      group: "3_outline",
+      command: "view.toggleOutline",
+      order: 1,
+      label: "Outline",
+      checked: (wb) => wb.settings.get("outline.visible"),
+    },
     { menu: "view", group: "3_outline", command: "navigate.goToHeading", order: 2 },
     { menu: "view", group: "3_outline", command: "navigate.nextHeading", order: 3 },
     { menu: "view", group: "3_outline", command: "navigate.previousHeading", order: 4 },

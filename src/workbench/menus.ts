@@ -1,5 +1,6 @@
 import type { Command, CommandRegistry } from "../core/commands";
 import type { MenuItem } from "./feature";
+import type { Workbench } from "./workbench";
 import { formatKey } from "./keys";
 
 export interface MenuEntry {
@@ -7,6 +8,11 @@ export interface MenuEntry {
   label: string;
   /** Display form of the primary key, for example `Ctrl+S`, or null. */
   keys: string | null;
+  /** Present for toggles and radio choices: whether the item is currently on. */
+  checked?: (workbench: Workbench) => boolean;
+  radio?: boolean;
+  /** Label of the submenu this entry belongs to, if any. */
+  submenu?: string;
 }
 
 export interface MenuModel {
@@ -63,6 +69,9 @@ export function buildMenus(items: readonly MenuItem[], commands: CommandRegistry
         command,
         label: item.label ?? command.title,
         keys: command.defaultKey ? formatKey(command.defaultKey) : null,
+        ...(item.checked ? { checked: item.checked } : {}),
+        ...(item.radio ? { radio: true } : {}),
+        ...(item.submenu ? { submenu: item.submenu } : {}),
       });
     }
     return { id, label: labelFor(id), groups };

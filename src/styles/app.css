@@ -15,12 +15,20 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 14px/1.4 var(--font-ui);
+  -webkit-font-smoothing: auto;
 }
 
 /* Visible focus everywhere. Outlines also survive Windows high contrast mode. */
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* The text area has the caret as its focus indicator, so it gets no ring or border. */
+.cm-editor.cm-focused,
+.cm-editor .cm-content:focus-visible,
+.cm-editor .cm-scroller:focus-visible {
+  outline: none;
 }
 
 button {
@@ -43,9 +51,50 @@ button {
   height: 100%;
 }
 
+/* Buttons that sit in dialogs, banners and the empty state: one look. */
+.dialog-actions button,
+.banner button,
+.empty-actions button {
+  min-height: 30px;
+  padding: 4px 14px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.dialog-actions button:hover,
+.banner button:hover,
+.empty-actions button:hover {
+  background: var(--bg-hover);
+}
+
+.dialog-actions button:active,
+.banner button:active,
+.empty-actions button:active {
+  background: var(--bg-pressed);
+}
+
+.dialog-actions button:first-child,
+.empty-actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.dialog-actions button:first-child:hover,
+.empty-actions button:first-child:hover {
+  background: var(--accent);
+  filter: brightness(0.92);
+}
+
 /* Tabs */
 .tabstrip {
   display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 4px 6px 0;
   overflow-x: auto;
   background: var(--bg-chrome);
   border-bottom: 1px solid var(--border);
@@ -54,13 +103,22 @@ button {
 .tab-wrap {
   display: flex;
   align-items: stretch;
-  border-right: 1px solid var(--border);
   flex: none;
+  min-height: 32px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  margin-bottom: -1px;
+}
+
+.tab-wrap:hover {
+  background: var(--bg-hover);
 }
 
 .tab-wrap[data-selected="true"] {
   background: var(--bg-tab-active);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  border-color: var(--border);
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 
 .tab,
@@ -74,8 +132,13 @@ button {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding: 8px 4px 8px 12px;
+  padding: 0 4px 0 12px;
   max-width: 220px;
+  border-radius: var(--radius-sm) 0 0 0;
+}
+
+.tab[aria-selected="true"] {
+  font-weight: 600;
 }
 
 .tab-title {
@@ -86,18 +149,24 @@ button {
 
 .dirty-dot {
   color: var(--accent);
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .tab-close {
-  padding: 0 10px;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 6px 0 2px;
+  padding: 0;
   color: var(--fg-muted);
   font-size: 16px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
 }
 
-.tab:hover,
 .tab-close:hover {
-  background: var(--bg-hover);
+  background: var(--bg-pressed);
+  color: var(--fg);
 }
 
 /* Editor */
@@ -128,11 +197,11 @@ button {
 
 .editor-host .cm-scroller {
   font-family: var(--font-mono);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .editor-host .cm-content {
-  padding: 12px 16px;
+  padding: 16px 20px 40vh;
   caret-color: var(--fg);
 }
 
@@ -140,23 +209,10 @@ button {
   border-left-color: var(--fg);
 }
 
-.editor-host .cm-editor.cm-focused {
-  outline: 2px solid var(--focus);
-  outline-offset: -2px;
-}
-
 .editor-host .cm-panels {
   background: var(--bg-chrome);
   color: var(--fg);
   border-color: var(--border);
-}
-
-.editor-host .cm-panels input,
-.editor-host .cm-panels button {
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
 }
 
 .empty {
@@ -167,15 +223,17 @@ button {
 /* Status bar */
 .statusbar {
   display: flex;
+  align-items: center;
   gap: 16px;
-  padding: 4px 12px;
+  min-height: 26px;
+  padding: 0 12px;
   background: var(--bg-chrome);
   border-top: 1px solid var(--border);
   color: var(--fg-muted);
   font-size: 12px;
 }
 
-/* Error banner */
+/* Banners */
 .banner {
   display: flex;
   justify-content: space-between;
@@ -184,6 +242,19 @@ button {
   padding: 6px 12px;
   background: var(--danger-bg);
   color: var(--danger-fg);
+  border-bottom: 1px solid var(--border);
+}
+
+.banner button {
+  min-height: 26px;
+  padding: 2px 10px;
+  background: transparent;
+  color: inherit;
+  border-color: currentColor;
+}
+
+.banner button:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 /* Dialog */
@@ -197,20 +268,23 @@ button {
 
 .dialog {
   width: min(440px, calc(100vw - 32px));
-  padding: 20px;
-  background: var(--bg);
+  padding: 24px;
+  background: var(--bg-elevated);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .dialog h2 {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .dialog p {
-  margin: 0 0 16px;
+  margin: 0 0 20px;
+  color: var(--fg);
 }
 
 .dialog-actions {
@@ -220,35 +294,11 @@ button {
   justify-content: flex-end;
 }
 
-.dialog-actions button,
-.banner button {
-  padding: 6px 12px;
-  background: var(--bg-chrome);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.dialog-actions button:first-child {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-}
-
-.dialog-actions button:hover,
-.banner button:hover {
-  filter: brightness(0.95);
-}
-
-@media (forced-colors: active) {
-  .tab-wrap[data-selected="true"] {
-    outline: 2px solid Highlight;
-  }
-}
-
 /* Menu bar */
 .menubar {
   display: flex;
+  gap: 2px;
+  padding: 3px 6px;
   background: var(--bg-chrome);
   border-bottom: 1px solid var(--border);
 }
@@ -258,9 +308,11 @@ button {
 }
 
 .menu-top {
-  padding: 5px 12px;
+  height: 28px;
+  padding: 0 10px;
   background: transparent;
   border: 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -272,16 +324,29 @@ button {
 .menu {
   position: absolute;
   z-index: 20;
-  top: 100%;
+  top: calc(100% + 2px);
   left: 0;
-  min-width: 240px;
+  min-width: 260px;
+  max-height: calc(100vh - 56px);
   margin: 0;
-  padding: 4px 0;
+  padding: 4px;
+  overflow-y: auto;
   list-style: none;
-  background: var(--bg);
+  background: var(--bg-elevated);
   color: var(--fg);
   border: 1px solid var(--border);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* A submenu is fixed to the window so that the scrolling menu around it cannot clip it. */
+.menu-sub {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 25;
+  min-width: 200px;
+  max-height: calc(100vh - 16px);
 }
 
 .menu li {
@@ -290,27 +355,60 @@ button {
 
 .menu-separator {
   height: 1px;
-  margin: 4px 0;
+  margin: 4px 8px;
   background: var(--border);
 }
 
 .menu-item {
   display: flex;
-  justify-content: space-between;
-  gap: 24px;
+  align-items: center;
   width: 100%;
-  padding: 5px 16px;
+  min-height: 28px;
+  padding: 3px 12px 3px 4px;
   background: transparent;
   border: 0;
+  border-radius: var(--radius-sm);
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .menu-item:hover,
+.menu-item[aria-expanded="true"],
 .menu-item:focus-visible {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--bg-hover);
+}
+
+.menu-item:focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
+}
+
+.menu-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  color: var(--accent);
+}
+
+.menu-dot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.menu-label {
+  flex: 1 1 auto;
+  padding-right: 32px;
+}
+
+.menu-chevron {
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1;
 }
 
 .menu-item[aria-disabled="true"] {
@@ -321,14 +419,13 @@ button {
 
 .menu-item[aria-disabled="true"]:hover {
   background: transparent;
-  color: var(--fg-muted);
 }
 
 .menu-keys,
 .palette-option kbd,
 .empty-shortcuts kbd {
   font: 12px var(--font-ui);
-  opacity: 0.8;
+  color: var(--fg-muted);
 }
 
 /* Command palette */
@@ -339,53 +436,70 @@ button {
 }
 
 .palette {
-  width: min(560px, calc(100vw - 32px));
-  background: var(--bg);
+  width: min(580px, calc(100vw - 32px));
+  background: var(--bg-elevated);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  box-shadow: var(--shadow);
 }
 
 .palette-input {
   width: 100%;
-  padding: 10px 14px;
+  height: 44px;
+  padding: 0 16px;
   font: inherit;
+  font-size: 15px;
   color: inherit;
-  background: var(--bg);
+  background: transparent;
   border: 0;
   border-bottom: 1px solid var(--border);
 }
 
+.palette-input:focus-visible {
+  outline-offset: -2px;
+}
+
+.palette-input::placeholder {
+  color: var(--fg-muted);
+}
+
 .palette-list {
-  max-height: 320px;
+  max-height: 336px;
   margin: 0;
-  padding: 4px 0;
+  padding: 4px;
   overflow-y: auto;
   list-style: none;
 }
 
 .palette-option {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 6px 14px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
+.palette-option:hover {
+  background: var(--bg-hover);
+}
+
 .palette-option[aria-selected="true"] {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .palette-option[aria-selected="true"] kbd {
-  opacity: 1;
+  color: var(--fg);
 }
 
 .palette-status {
   margin: 0;
-  padding: 4px 14px;
+  padding: 6px 16px;
   color: var(--fg-muted);
   font-size: 12px;
   border-top: 1px solid var(--border);
@@ -401,11 +515,12 @@ button {
 
 .empty-state h2 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .empty-state p {
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   color: var(--fg-muted);
 }
 
@@ -413,28 +528,16 @@ button {
   display: flex;
   gap: 8px;
   justify-content: center;
-  margin-bottom: 24px;
-}
-
-.empty-actions button {
-  padding: 6px 14px;
-  background: var(--bg-chrome);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.empty-actions button:first-child {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
+  margin-bottom: 28px;
 }
 
 .empty-shortcuts {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   margin: 0;
+  padding-top: 16px;
   color: var(--fg-muted);
+  border-top: 1px solid var(--border);
 }
 
 .empty-shortcuts div {
@@ -462,17 +565,35 @@ button {
   flex-direction: column;
 }
 
+/* A 1px line with a wider grab area either side. */
 .splitter {
+  position: relative;
   flex: none;
-  width: 6px;
-  background: var(--border);
+  width: 7px;
+  margin-inline: -3px;
+  z-index: 2;
+  background: transparent;
   cursor: col-resize;
   touch-action: none;
 }
 
-.splitter:hover,
-.splitter:focus-visible {
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: 3px;
+  background: var(--border);
+}
+
+.splitter:hover::after,
+.splitter:focus-visible::after,
+.splitter:active::after {
+  inset-inline: 2px;
   background: var(--accent);
+}
+
+.splitter:focus-visible {
+  outline-offset: -2px;
 }
 
 .side-pane {
@@ -489,6 +610,7 @@ button {
 
 .status-right {
   display: flex;
+  align-items: center;
   gap: 16px;
   margin-left: auto;
 }
@@ -502,18 +624,59 @@ button {
 .banner[data-kind="warning"] {
   background: var(--bg-chrome);
   color: var(--fg);
-  border-bottom: 1px solid var(--border);
 }
 
 .editor-host .cm-gutters {
-  background: var(--bg-chrome);
+  background: var(--bg);
   color: var(--fg-muted);
   border-right: 1px solid var(--border);
 }
 
+.editor-host .cm-lineNumbers .cm-gutterElement {
+  padding: 0 10px 0 12px;
+}
+
+/* High contrast: drop the fills, keep borders and the system focus colour. */
 @media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  .tab-wrap[data-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .menu-item:hover,
   .menu-item:focus-visible,
+  .menu-item[aria-expanded="true"],
   .palette-option[aria-selected="true"] {
     outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .menu-top:hover,
+  .menu-top[aria-expanded="true"] {
+    outline: 1px solid ButtonText;
+  }
+
+  .palette-option[aria-selected="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .menu,
+  .palette,
+  .dialog {
+    border: 1px solid CanvasText;
+  }
+
+  .splitter::after {
+    background: CanvasText;
+  }
+
+  .menu-check {
+    color: CanvasText;
   }
 }
