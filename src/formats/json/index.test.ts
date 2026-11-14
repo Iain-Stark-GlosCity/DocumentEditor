@@ -72,11 +72,24 @@ describe("JSON provider", () => {
   });
 
   it("declines text with a syntax error, leaving the document and history alone", () => {
-    const view = editor('{"a":1,}', "/x/a.json");
-    expect(command("json.format").run(view)).toBe(false);
-    expect(command("json.minify").run(view)).toBe(false);
-    expect(view.state.doc.toString()).toBe('{"a":1,}');
-    expect(undo(view)).toBe(false);
+    for (const text of ['{"a":1,,}', '// c\n{"a": }', '{"a":1', '{"a":1,} x']) {
+      const view = editor(text, "/x/a.json");
+      expect(command("json.format").run(view)).toBe(false);
+      expect(command("json.minify").run(view)).toBe(false);
+      expect(view.state.doc.toString()).toBe(text);
+      expect(undo(view)).toBe(false);
+    }
+  });
+
+  it("formats and minifies strict .json that has only comments and trailing commas, keeping both", () => {
+    const text = '// note\n{"a":1,/* mid */"b":[1,2,],}\n';
+    const view = editor(text, "/x/tsconfig.json");
+    expect(command("json.format").run(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe(
+      '// note\n{\n  "a": 1, /* mid */\n  "b": [\n    1,\n    2,\n  ],\n}\n',
+    );
+    expect(command("json.minify").run(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('// note\n{"a":1,/* mid */\n"b":[1,2,],}\n');
   });
 
   it("allows comments in .jsonc and not in .json", () => {
@@ -84,8 +97,15 @@ describe("JSON provider", () => {
     const jsonc = editor(text, "/x/a.jsonc");
     expect(command("json.format").run(jsonc)).toBe(true);
     expect(jsonc.state.doc.toString()).toBe('// note\n{\n  "a": 1\n} // end\n');
+    // Strict .json formats too (the comments are only warnings) and keeps them.
     const json = editor(text, "/x/a.json");
-    expect(command("json.format").run(json)).toBe(false);
+    expect(command("json.format").run(json)).toBe(true);
+    expect(json.state.doc.toString()).toBe(jsonc.state.doc.toString());
+  });
+
+  it("does not allow trailing commas in .jsonc", () => {
+    const view = editor('{"a":1,}', "/x/a.jsonc");
+    expect(command("json.format").run(view)).toBe(false);
   });
 
   it("returns true and changes nothing when the text is already formatted", () => {

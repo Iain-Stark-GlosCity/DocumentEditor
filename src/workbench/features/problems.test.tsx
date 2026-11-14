@@ -16,6 +16,7 @@ const checkedProvider: TextFormatProvider = {
   name: "Checked",
   fileExtensions: ["chk"],
   viewModes: ["source"],
+  settings: ["json.lint"],
   editorExtensions: (context) =>
     context.setting("json.lint", true)
       ? [
@@ -23,11 +24,11 @@ const checkedProvider: TextFormatProvider = {
             limit: 60,
             delay: 10,
             source: (state) =>
-              [...state.doc.toString().matchAll(/BAD/g)].map((m) => ({
+              [...state.doc.toString().matchAll(/BAD|WARN/g)].map((m) => ({
                 from: m.index,
-                to: m.index + 3,
-                severity: "error" as const,
-                message: "Found BAD",
+                to: m.index + m[0].length,
+                severity: m[0] === "BAD" ? ("error" as const) : ("warning" as const),
+                message: `Found ${m[0]}`,
               })),
           }),
         ]
@@ -88,6 +89,18 @@ describe("problems feature", () => {
     });
     expect((await status(/^1 problem: 1 error/)).textContent).toBe("1 problem");
     void wb;
+  });
+
+  it("calls warnings by that name, and counts errors and warnings together once there is an error", async () => {
+    await open("/d/w.chk", "WARN\nWARN\n");
+    const only = await status(/^2 warnings, no errors/);
+    expect(only.textContent).toBe("2 warnings");
+    act(() => {
+      const view = editorView();
+      view.dispatch({ changes: { from: 0, insert: "BAD\n" } });
+    });
+    const mixed = await status(/^3 problems: 1 error, 2 warnings or hints/);
+    expect(mixed.textContent).toBe("3 problems");
   });
 
   it("says when a document is too large to check", async () => {

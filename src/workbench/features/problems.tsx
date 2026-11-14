@@ -43,8 +43,13 @@ export function summariseProblems(state: EditorState): ProblemSummary | null {
       ? { label: "Checking…", detail: "Checking for problems" }
       : { label: "No problems", detail: "No problems found" };
   }
+  if (status.errors === 0) {
+    // Only warnings or hints: say so, rather than calling them problems.
+    const label = count(status.others, "warning", "warnings");
+    return { label, detail: `${label}, no errors` };
+  }
   const parts = [
-    status.errors > 0 && count(status.errors, "error", "errors"),
+    count(status.errors, "error", "errors"),
     status.others > 0 && count(status.others, "warning or hint", "warnings or hints"),
   ].filter(Boolean);
   const label = count(total, "problem", "problems");
@@ -122,13 +127,6 @@ export const problems: Feature = {
   id: "problems",
   statusItems: [{ id: "problems", align: "right", order: 6, component: ProblemsStatus }],
   commands,
-  activate(wb) {
-    // A format's `<name>.lint` setting adds or removes its checker, so rebuild the format's
-    // editor extensions when one changes.
-    return wb.settings.subscribeAll((key) => {
-      if (key.endsWith(".lint")) wb.reconfigureEditors("provider");
-    });
-  },
   menuItems: [
     {
       menu: "view",

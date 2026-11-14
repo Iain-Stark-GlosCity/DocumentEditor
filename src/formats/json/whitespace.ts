@@ -21,7 +21,12 @@ interface Token {
 export interface WhitespaceOptions {
   /** Comments are allowed (JSON with comments). */
   comments: boolean;
+  /** A comma before a closing `}` or `]` is allowed, and kept as written. Default false. */
+  trailingCommas?: boolean;
 }
+
+/** What strict `.json` documents are retried with when they hold only comments or trailing commas. */
+export const LENIENT: WhitespaceOptions = { comments: true, trailingCommas: true };
 
 // Raw control characters (U+0000 to U+001F) are not allowed inside a JSON string.
 // eslint-disable-next-line no-control-regex
@@ -94,11 +99,25 @@ function tokenise(text: string, comments: boolean): Token[] | null {
 type Expect = "value" | "valueOrEnd" | "keyOrEnd" | "key" | "colon" | "after";
 
 /** Checks the token order against the JSON grammar, without recursion. Comments are skipped. */
-function validate(tokens: readonly Token[]): boolean {
+function validate(tokens: readonly Token[], trailingCommas: boolean): boolean {
   const stack: ("{" | "[")[] = [];
   let expect: Expect = "value";
+  // The last token that is not a comment was a comma.
+  let afterComma = false;
   for (const { kind } of tokens) {
     if (kind === "line" || kind === "block") continue;
+    const top = stack[stack.length - 1];
+    const wasComma = afterComma;
+    afterComma = kind === ",";
+    if (
+      trailingCommas &&
+      wasComma &&
+      ((kind === "]" && top === "[") || (kind === "}" && top === "{"))
+    ) {
+      stack.pop();
+      expect = "after";
+      continue;
+    }
     switch (expect) {
       case "value":
       case "valueOrEnd":
@@ -148,7 +167,7 @@ function validate(tokens: readonly Token[]): boolean {
 
 function parseTokens(text: string, options: WhitespaceOptions): Token[] | null {
   const tokens = tokenise(text, options.comments);
-  return tokens !== null && validate(tokens) ? tokens : null;
+  return tokens !== null && validate(tokens, options.trailingCommas === true) ? tokens : null;
 }
 
 const isComment = (token: Token) => token.kind === "line" || token.kind === "block";

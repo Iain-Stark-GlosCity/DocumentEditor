@@ -58,6 +58,7 @@ export const xmlProvider: TextFormatProvider = {
   fileExtensions: ["xml", "rels", "xsd", "xsl", "xslt"],
   viewModes: ["source"],
   spellcheck: false,
+  settings: ["xml.indent", "xml.lint"],
   commands: xmlCommands,
   // Word writes document.xml as one line of a megabyte or more.
   longLineCommand: "xml.format",

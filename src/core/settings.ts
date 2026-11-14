@@ -154,6 +154,15 @@ export class SettingsStore {
     this.store.setState({ [key]: value } as Partial<SettingValues>);
   }
 
+  /**
+   * Sets a setting by an arbitrary string key, as a format's command does. Throws if the key is
+   * unknown or the value is not valid for it, exactly as `set` does.
+   */
+  setByKey(key: string, value: unknown): void {
+    if (!isSettingKey(key)) throw new RangeError(`Unknown setting "${key}"`);
+    this.set(key, value as SettingValue<typeof key>);
+  }
+
   reset(key: SettingKey): void {
     this.store.setState({ [key]: def(key).default } as Partial<SettingValues>);
   }

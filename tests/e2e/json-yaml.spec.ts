@@ -7,7 +7,7 @@ const selection = (page: Page) => page.evaluate(() => window.getSelection()?.toS
 test("a .json file with a syntax error shows a marker, F8 finds it and Format document works once it is fixed", async ({
   app,
 }) => {
-  await openFile(app, "/demo/data.json", '{"name":"demo","tags":["a","b",],"n":1}');
+  await openFile(app, "/demo/data.json", '{"name":"demo","tags":["a","b"],,"n":1}');
   await expect(editor(app)).toContainText('"name"');
 
   // The marker and the squiggle appear after the check, and the status item counts one problem.
@@ -17,17 +17,16 @@ test("a .json file with a syntax error shows a marker, F8 finds it and Format do
 
   // Format document declines text it cannot read: nothing changes.
   await app.getByRole("button", { name: /Format document/ }).click();
-  expect(await documentText(app)).toBe('{"name":"demo","tags":["a","b",],"n":1}');
+  expect(await documentText(app)).toBe('{"name":"demo","tags":["a","b"],,"n":1}');
 
   // F8 selects the problem.
   await editor(app).click();
   await app.keyboard.press("Control+Home");
   await app.keyboard.press("F8");
-  await expect.poll(() => selection(app)).toBe("]");
+  await expect.poll(() => selection(app)).toBe(",");
 
-  // Fixing it removes the marker and the count says so.
-  await app.keyboard.press("ArrowLeft");
-  await app.keyboard.press("Backspace");
+  // Fixing it removes the marker and the count says so. The selected comma is the extra one.
+  await app.keyboard.press("Delete");
   await expect(app.locator(".cm-lint-marker-error")).toHaveCount(0);
   await expect(problems(app)).toHaveText("No problems");
 
@@ -96,7 +95,7 @@ test("Tab indents with spaces in YAML, and Escape then Tab leaves the editor", a
 });
 
 test("the problems panel opens from the status bar and from Ctrl+Shift+M", async ({ app }) => {
-  await openFile(app, "/demo/panel.json", '{\n  "a": 1,\n}\n');
+  await openFile(app, "/demo/panel.json", '{\n  "a": 1 "b"\n}\n');
   await expect(problems(app)).toHaveText("1 problem");
   await problems(app).click();
   await expect(app.getByRole("listbox", { name: "Diagnostics" })).toBeVisible();
@@ -111,4 +110,23 @@ test("the problems panel opens from the status bar and from Ctrl+Shift+M", async
 test("a Markdown document has no problem count", async ({ app }) => {
   await expect(editor(app)).toContainText("Welcome");
   await expect(problems(app)).toHaveCount(0);
+});
+
+test("a .json file with a comment shows a warning and no error, and Format document keeps the comment", async ({
+  app,
+}) => {
+  const text = '// compiler options\n{"a":1,"b":[1,2,]}\n';
+  await openFile(app, "/demo/tsconfig.json", text);
+  await expect(editor(app)).toContainText("compiler options");
+  await expect(app.locator(".cm-lint-marker-warning").first()).toBeVisible();
+  await expect(app.locator(".cm-lintRange-warning").first()).toBeVisible();
+  await expect(app.locator(".cm-lint-marker-error")).toHaveCount(0);
+  await expect(app.locator(".cm-lintRange-error")).toHaveCount(0);
+  await expect(problems(app)).toHaveText("2 warnings");
+
+  await app.getByRole("button", { name: /Format document/ }).click();
+  await expect
+    .poll(() => documentText(app))
+    .toBe('// compiler options\n{\n  "a": 1,\n  "b": [\n    1,\n    2,\n  ]\n}\n');
+  await expect(problems(app)).toHaveText("2 warnings");
 });

@@ -250,3 +250,27 @@ describe("generated documents", () => {
     }
   });
 });
+
+describe("trailing commas", () => {
+  const on = { comments: true, trailingCommas: true };
+
+  it("are refused unless allowed", () => {
+    expect(formatJson("[1,]", 2, { comments: true })).toBeNull();
+    expect(minifyJson('{"a":1,}', { comments: true })).toBeNull();
+  });
+
+  it("are kept exactly when allowed", () => {
+    expect(formatJson('{"a":[1,2,],}', 2, on)).toBe('{\n  "a": [\n    1,\n    2,\n  ],\n}');
+    expect(minifyJson('{ "a": [1, 2, ], }', on)).toBe('{"a":[1,2,],}');
+  });
+
+  it("allow a comment between the comma and the bracket", () => {
+    expect(minifyJson("[1, /* x */ ]", on)).toBe("[1,/* x */]");
+  });
+
+  it("still refuse a comma with nothing before it, a doubled comma and a missing value", () => {
+    for (const text of ["[,]", "[1,,]", '{"a":,}', '{,"a":1}', "{,}", '{"a":1,,}']) {
+      expect(formatJson(text, 2, on)).toBeNull();
+    }
+  });
+});
