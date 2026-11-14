@@ -13,6 +13,7 @@ export function EmptyState({ workbench }: { workbench: Workbench }) {
   });
   return (
     <div className="empty-state">
+      <img className="empty-logo" src="/icon.png" alt="" width={96} height={96} />
       <h2>No document open</h2>
       <p>Start a new file, or open one that you already have.</p>
       <div className="empty-actions">

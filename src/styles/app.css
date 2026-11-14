@@ -513,6 +513,11 @@ button {
   text-align: center;
 }
 
+.empty-logo {
+  display: block;
+  margin: 0 auto 16px;
+}
+
 .empty-state h2 {
   margin: 0 0 8px;
   font-size: 20px;
@@ -549,6 +554,12 @@ button {
 .empty-shortcuts dt,
 .empty-shortcuts dd {
   margin: 0;
+}
+
+/* A command with two keys (Ctrl+Shift+P and F1) shows them apart, not run together. */
+.empty-shortcuts dd {
+  display: flex;
+  gap: 8px;
 }
 
 /* Editor area with optional side panes */
