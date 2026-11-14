@@ -9,7 +9,11 @@ export function xmlProblem(text: string): string | null {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   const failure = doc.getElementsByTagNameNS("*", "parsererror")[0] ?? null;
   if (!failure) return null;
-  const message = (failure.textContent ?? "").trim();
+  // Chromium appends "Below is a rendering of the page up to the first error." to the message
+  // (it sits in the same text node as the reason, sometimes without a line break before it).
+  const message = (failure.textContent ?? "")
+    .replace(/\s*Below is a rendering of the page up to the first error\.?/gi, "")
+    .trim();
 
   // Chromium (WebView2): "error on line 3 at column 7: Opening and ending tag mismatch ..."
   let match = /error on line (\d+) at column (\d+):\s*([^\n]*)/i.exec(message);
