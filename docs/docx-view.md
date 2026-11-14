@@ -86,6 +86,34 @@ Indented and justified. <!-- p indent-left=36pt hanging=18pt spacing-after=6pt a
 - Style names written all in lower case in the file (as Word writes its built-in ones) are shown
   title-cased, as Word's own interface shows them: `heading 1` is `Heading 1`.
 
+### Implied styles
+
+A style that merely restates the construct it sits on adds no information, so no `style=` is
+printed for it. A style is matched by id or by resolved name, ignoring case, spaces and
+punctuation (ids vary between generators). Only these pairs are implied:
+
+| Construct | Implied styles |
+| --- | --- |
+| Text inside a hyperlink (`[text](url)`) | Character styles `Hyperlink`, `FollowedHyperlink` |
+| A footnote or endnote reference, or the note number inside a note | `Footnote Reference`, `Endnote Reference` |
+| A comment reference, or the comment mark inside a comment | `Comment Reference` (also `Annotation Reference`) |
+| Content of a content control that shows its placeholder | `Placeholder Text` |
+| A paragraph in a footnotes or endnotes part | Paragraph styles `Footnote Text`, `Endnote Text` |
+| A paragraph in a header or footer part | `Header`, `Footer` |
+| A paragraph in the comments part | `Comment Text`, `Annotation Text` |
+
+Any other style on the same construct (a `Strong` run inside a link, a `Heading 1` paragraph
+inside a footnote) is printed as usual, and so is an implied style used somewhere else (a
+`Hyperlink` run outside a hyperlink). The **Styles** section still lists every style in use,
+implied ones included, so nothing is hidden.
+
+### Outline
+
+The ATX headings give the editor's outline panel its entries, so a Word document has an outline.
+HTML comments (the legend, the trailing paragraph comments) and inline tags such as `<span>` or
+`<bookmark/>` are not part of a heading's text; a heading's number from a numbered style is a
+comment, not text, so the outline shows the heading's own words.
+
 Paragraph properties: `align` (`left`, `centre`, `right`, `justify`, `distribute`…),
 `indent-left`, `indent-right`, `indent-start`, `indent-end`, `first-line`, `hanging`,
 `spacing-before`, `spacing-after` (or `auto`), `line-spacing`, `keep-next`, `keep-lines`,

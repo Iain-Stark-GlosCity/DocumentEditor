@@ -177,6 +177,50 @@ export function displayStyleName(name: string): string {
   return name.replace(/(^|\s)(\p{L})/gu, (_m, space: string, c: string) => space + c.toUpperCase());
 }
 
+/* ---------- implied styles ---------- */
+
+/** A construct whose own character style adds nothing to what the notation already says. */
+export type Construct = "hyperlink" | "note-reference" | "comment-reference" | "placeholder";
+
+/** The kind of part being written, which implies a paragraph style for its paragraphs. */
+export type PartKind = "body" | "notes" | "header-footer" | "comments";
+
+/**
+ * Implied styles: styles that merely restate the construct they sit on, so no `style=` is printed
+ * for them (docs/docx-view.md, "Implied styles"). A style is matched by id or by resolved name,
+ * ignoring case, spaces and punctuation, because ids vary between generators. Any other style on
+ * the same construct is still printed, and the Styles appendix lists every style in use, implied
+ * ones included.
+ */
+export const IMPLIED_CHARACTER_STYLES: Readonly<Record<Construct, readonly string[]>> = {
+  hyperlink: ["Hyperlink", "FollowedHyperlink"],
+  "note-reference": ["Footnote Reference", "Endnote Reference"],
+  "comment-reference": ["Comment Reference", "Annotation Reference"],
+  placeholder: ["Placeholder Text"],
+};
+
+export const IMPLIED_PARAGRAPH_STYLES: Readonly<
+  Record<Exclude<PartKind, "body">, readonly string[]>
+> = {
+  notes: ["Footnote Text", "Endnote Text"],
+  "header-footer": ["Header", "Footer"],
+  comments: ["Comment Text", "Annotation Text"],
+};
+
+function styleKey(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+/** Whether a style (by id and resolved name) is one of `implied`. */
+export function isImpliedStyle(
+  implied: readonly string[],
+  id: string,
+  resolvedName: string,
+): boolean {
+  const keys = new Set(implied.map(styleKey));
+  return keys.has(styleKey(id)) || keys.has(styleKey(resolvedName));
+}
+
 /** Whether an on/off property is on. `<w:b/>` is on; `w:val="0"`, `false`, `off` are off. */
 export function isOn(el: XElement | undefined): boolean | undefined {
   if (!el) return undefined;

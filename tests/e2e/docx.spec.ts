@@ -97,6 +97,16 @@ test("editing one part of a Word file changes only that part, and broken XML is 
   );
   expect(changed).toEqual(["word/document.xml"]);
   expect(new TextDecoder().decode(after["word/document.xml"])).toContain("Annual report");
+  // The Formatting view follows the saved part, and says nothing about it: the user made the change.
+  await app
+    .getByRole("tab", { name: /report\.docx/ })
+    .filter({ hasNotText: "›" })
+    .click();
+  // The browser build has no file watcher, so tell it what the desktop one would.
+  await app.evaluate(() => window.__demoPlatform?.triggerFileChange("/demo/report.docx"));
+  await expect.poll(() => documentText(app)).toContain("Annual report");
+  await app.waitForTimeout(600);
+  await expect(app.getByText(/changed on disk/)).toHaveCount(0);
   // The one-off backup is the original, untouched.
   expect(
     Buffer.compare(
@@ -106,6 +116,7 @@ test("editing one part of a Word file changes only that part, and broken XML is 
   ).toBe(0);
 
   // Broken XML is refused and the archive is left alone.
+  await app.getByRole("tab", { name: /report\.docx › document\.xml/ }).click();
   await editor(app).click();
   await app.keyboard.press("Control+Home");
   await app.keyboard.type("<broken");

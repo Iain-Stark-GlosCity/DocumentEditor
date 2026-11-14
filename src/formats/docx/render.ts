@@ -10,11 +10,16 @@ import {
   emu,
   errorPlaceholder,
   escapeText,
+  IMPLIED_CHARACTER_STYLES,
+  IMPLIED_PARAGRAPH_STYLES,
+  isImpliedStyle,
   rawPlaceholder,
   tag,
   tagAttrs,
   twips,
   type Attr,
+  type Construct,
+  type PartKind,
 } from "./notation";
 import type { Numbering } from "./numbering";
 import type { Package } from "./package";
@@ -40,6 +45,11 @@ export interface CommentAnchor {
 export class Renderer {
   /** The part being rendered, for relationships and raw placeholders. */
   part = "";
+  /** What kind of part it is: decides which paragraph style is implied. */
+  private partKind: PartKind = "body";
+  /** How many hyperlinks and shown content-control placeholders enclose the current position. */
+  private hyperlinks = 0;
+  private placeholders = 0;
   doc: XDocument = { root: null, source: "", problems: [] };
   readonly usedStyles = new Set<string>();
   readonly commentAnchors = new Map<string, string>();
@@ -57,15 +67,17 @@ export class Renderer {
   ) {}
 
   /** Switches to another part; returns a function that switches back. */
-  enter(part: string, doc: XDocument): () => void {
-    const prev = { part: this.part, doc: this.doc, list: this.listWidths };
+  enter(part: string, doc: XDocument, kind: PartKind = "body"): () => void {
+    const prev = { part: this.part, doc: this.doc, list: this.listWidths, kind: this.partKind };
     this.part = part;
     this.doc = doc;
     this.listWidths = [];
+    this.partKind = kind;
     return () => {
       this.part = prev.part;
       this.doc = prev.doc;
       this.listWidths = prev.list;
+      this.partKind = prev.kind;
     };
   }
 
@@ -99,7 +111,15 @@ export class Renderer {
             ? `sdt ${commentAttrs(this.sdtAttrs(child(el, "w:sdtPr")))}`
             : `custom-xml ${commentAttrs(customXmlAttrs(el))}`;
         const content = el.name === "w:sdt" ? child(el, "w:sdtContent") : el;
-        const inner = content ? this.blocks(content, depth + 1) : [];
+        const showing =
+          el.name === "w:sdt" && child(child(el, "w:sdtPr"), "w:showingPlcHdr") !== undefined;
+        if (showing) this.placeholders++;
+        let inner: string[];
+        try {
+          inner = content ? this.blocks(content, depth + 1) : [];
+        } finally {
+          if (showing) this.placeholders--;
+        }
         const close = el.name === "w:sdt" ? "/sdt" : "/custom-xml";
         return [comment(head.trim()), ...inner, comment(close)];
       }
@@ -157,7 +177,7 @@ export class Renderer {
     const attrs: Attr[] = [];
     if (styleId !== undefined) {
       this.usedStyles.add(styleId);
-      if (styleId !== this.styles.defaults.paragraph)
+      if (styleId !== this.styles.defaults.paragraph && !this.impliedParagraphStyle(styleId))
         attrs.push(["style", this.styles.name(styleId)]);
     }
     // Numbering: direct, else from the style.
@@ -251,6 +271,11 @@ export class Renderer {
     return { prefix, attrs, items };
   }
 
+  private impliedParagraphStyle(id: string): boolean {
+    if (this.partKind === "body") return false;
+    return isImpliedStyle(IMPLIED_PARAGRAPH_STYLES[this.partKind], id, this.styles.name(id));
+  }
+
   private listIndent(ilvl: number, width: number): number {
     this.listWidths.length = Math.min(this.listWidths.length, ilvl + 1);
     let indent = 0;
@@ -319,7 +344,12 @@ export class Renderer {
             close: "</hyperlink>",
           });
         inner.push({ key: `link${el.start}`, open: "[", close: `](${linkTarget(url)}${title})` });
-        this.inlineChildren(el, inner, items, depth);
+        this.hyperlinks++;
+        try {
+          this.inlineChildren(el, inner, items, depth);
+        } finally {
+          this.hyperlinks--;
+        }
         return true;
       }
       case "w:ins":
@@ -359,9 +389,15 @@ export class Renderer {
         const attrs = this.sdtAttrs(child(el, "w:sdtPr"));
         const content = child(el, "w:sdtContent");
         const w: Wrapper = { key: `sdt${el.start}`, open: tag("sdt", attrs), close: "</sdt>" };
-        if (content && elements(content).length)
-          this.inlineChildren(content, [...wrappers, w], items, depth + 1);
-        else this.token(items, wrappers, tag("sdt", attrs, true));
+        if (content && elements(content).length) {
+          const showing = child(child(el, "w:sdtPr"), "w:showingPlcHdr") !== undefined;
+          if (showing) this.placeholders++;
+          try {
+            this.inlineChildren(content, [...wrappers, w], items, depth + 1);
+          } finally {
+            if (showing) this.placeholders--;
+          }
+        } else this.token(items, wrappers, tag("sdt", attrs, true));
         return true;
       }
       case "w:smartTag": {
@@ -517,21 +553,25 @@ export class Renderer {
   }
 
   /** Attributes for a run's formatting (character style first). */
-  runAttrs(rPr: XElement | undefined): Attr[] {
+  runAttrs(rPr: XElement | undefined, implied: readonly Construct[] = []): Attr[] {
     if (!rPr) return [];
     const out: Attr[] = [];
     const style = child(rPr, "w:rStyle")?.attrs["w:val"];
     if (style) {
       this.usedStyles.add(style);
-      out.push(["style", this.styles.name(style)]);
+      const name = this.styles.name(style);
+      const restates = implied.some((c) =>
+        isImpliedStyle(IMPLIED_CHARACTER_STYLES[c], style, name),
+      );
+      if (!restates) out.push(["style", name]);
     }
     out.push(...describeProps(rPr, "r", this.props));
     return out;
   }
 
   /** The wrappers a run's own formatting adds, outermost first. */
-  runWrappers(rPr: XElement | undefined): Wrapper[] {
-    const attrs = this.runAttrs(rPr);
+  runWrappers(rPr: XElement | undefined, implied: readonly Construct[] = []): Wrapper[] {
+    const attrs = this.runAttrs(rPr, implied);
     const span: Attr[] = [];
     let bold = false;
     let italic = false;
@@ -581,7 +621,7 @@ export class Renderer {
 
   private run(r: XElement, outer: readonly Wrapper[], items: Item[], depth: number): void {
     const rPr = child(r, "w:rPr");
-    const wrappers = [...outer, ...this.runWrappers(rPr)];
+    const wrappers = [...outer, ...this.runWrappers(rPr, this.constructsOf(r))];
     for (const el of elements(r)) {
       try {
         this.runChild(el, wrappers, items, depth);
@@ -593,6 +633,19 @@ export class Renderer {
         });
       }
     }
+  }
+
+  /** The constructs a run sits on, whose own character styles are implied. */
+  private constructsOf(r: XElement): Construct[] {
+    const out: Construct[] = [];
+    if (this.hyperlinks > 0) out.push("hyperlink");
+    if (this.placeholders > 0) out.push("placeholder");
+    for (const el of elements(r)) {
+      if (/^w:(footnote|endnote)(Reference|Ref)$/.test(el.name)) out.push("note-reference");
+      else if (el.name === "w:commentReference" || el.name === "w:annotationRef")
+        out.push("comment-reference");
+    }
+    return out;
   }
 
   private runChild(el: XElement, wrappers: readonly Wrapper[], items: Item[], depth: number): void {
