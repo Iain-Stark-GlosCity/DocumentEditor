@@ -5,6 +5,7 @@
  * importing a format (CLAUDE.md rule 4).
  */
 import { FormatRegistry } from "./core/registry";
+import { csvProvider } from "./formats/csv";
 import { markdownProvider } from "./formats/markdown";
 import { plainTextProvider } from "./formats/plain-text";
 
@@ -13,5 +14,6 @@ export function createRegistry(): FormatRegistry {
   // A new document starts as Markdown; a file nobody claims opens as plain text.
   registry.register(markdownProvider, { default: true });
   registry.register(plainTextProvider, { fallback: true });
+  registry.register(csvProvider);
   return registry;
 }

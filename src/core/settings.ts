@@ -75,6 +75,10 @@ export const SETTINGS_SCHEMA = {
   /** The formatting ribbon between the menu bar and the tabs. */
   "ui.ribbon": bool(true),
   "markdown.tables.autoFormat": bool(true),
+  /** CSV and TSV: how fields are split ("auto" detects it), the table preview and its size. */
+  "csv.delimiter": oneOf(["auto", "comma", "semicolon", "tab", "pipe"], "auto"),
+  "csv.headerRow": bool(true),
+  "csv.previewRows": num(1000, 50, 20_000, true),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),
   "markdown.math": bool(true),
