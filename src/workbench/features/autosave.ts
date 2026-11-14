@@ -40,7 +40,16 @@ function AutosaveStatus({ workbench }: FeatureComponentProps) {
 export const autosave: Feature = {
   id: "autosave",
   statusItems: [{ id: "autosave", order: 40, component: AutosaveStatus }],
-  menuItems: [{ menu: "file", group: "2_save", command: "files.toggleAutoSave", order: 10 }],
+  menuItems: [
+    {
+      menu: "file",
+      group: "2_save",
+      command: "files.toggleAutoSave",
+      order: 10,
+      label: "Autosave",
+      checked: (wb) => wb.settings.get("files.autoSave") !== "off",
+    },
+  ],
   activate(wb) {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     /** Documents whose last automatic save failed and which the user has been told about. */

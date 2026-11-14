@@ -45,8 +45,22 @@ export const editorAppearance: Feature = {
     ];
   },
   menuItems: [
-    { menu: "view", group: "1_editor", command: "view.toggleWordWrap", order: 1 },
-    { menu: "view", group: "1_editor", command: "view.toggleLineNumbers", order: 2 },
+    {
+      menu: "view",
+      group: "1_editor",
+      command: "view.toggleWordWrap",
+      order: 1,
+      label: "Word wrap",
+      checked: (wb) => wb.settings.get("editor.wordWrap"),
+    },
+    {
+      menu: "view",
+      group: "1_editor",
+      command: "view.toggleLineNumbers",
+      order: 2,
+      label: "Line numbers",
+      checked: (wb) => wb.settings.get("editor.lineNumbers"),
+    },
     { menu: "view", group: "2_zoom", command: "view.zoomIn", order: 1 },
     { menu: "view", group: "2_zoom", command: "view.zoomOut", order: 2 },
     { menu: "view", group: "2_zoom", command: "view.zoomReset", order: 3 },

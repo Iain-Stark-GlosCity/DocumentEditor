@@ -21,5 +21,13 @@ export const spellcheck: Feature = {
       run: () => wb.settings.set("editor.spellcheck", !wb.settings.get("editor.spellcheck")),
     },
   ],
-  menuItems: [{ menu: "edit", group: "7_proofing", command: "edit.toggleSpellcheck" }],
+  menuItems: [
+    {
+      menu: "edit",
+      group: "7_proofing",
+      command: "edit.toggleSpellcheck",
+      label: "Spellcheck",
+      checked: (wb) => wb.settings.get("editor.spellcheck"),
+    },
+  ],
 };

@@ -15,6 +15,20 @@ import type { Command } from "../../core/commands";
 import type { Feature } from "../feature";
 import type { Workbench } from "../workbench";
 
+/** The panel's labels in sentence-case British English (CodeMirror's own are lowercase). */
+const PHRASES: Record<string, string> = {
+  next: "Next",
+  previous: "Previous",
+  all: "Select all",
+  "match case": "Match case",
+  regexp: "Regular expression",
+  "by word": "Whole word",
+  replace: "Replace",
+  "replace all": "Replace all",
+  close: "Close",
+  go: "Go",
+};
+
 /**
  * Find, replace, go to line and multiple selections. The search itself is `@codemirror/search`;
  * keys are dispatched by the workbench commands below, not by its keymap.
@@ -27,6 +41,7 @@ export const find: Feature = {
     // dispatches the other keys). Escape closes the panel and returns focus to the editor, from
     // the panel's fields and from the editor alike; it falls through when no panel is open.
     keymap.of([{ key: "Escape", run: closeSearchPanel, scope: "editor search-panel" }]),
+    EditorState.phrases.of(PHRASES),
     highlightSelectionMatches(),
     // Select next and select all occurrences add ranges, which CodeMirror drops unless this is on.
     EditorState.allowMultipleSelections.of(true),

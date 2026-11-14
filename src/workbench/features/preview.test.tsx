@@ -86,7 +86,7 @@ describe("showing and hiding the pane", () => {
   it("is in the View menu", async () => {
     await setup(markdownish, "x\n", "source");
     fireEvent.click(screen.getByRole("menuitem", { name: "View" }));
-    expect(await screen.findByRole("menuitem", { name: /Toggle split preview/ })).toBeTruthy();
+    expect(await screen.findByRole("menuitemcheckbox", { name: /Split preview/ })).toBeTruthy();
   });
 
   it("moves focus between the editor and the preview with F6", async () => {

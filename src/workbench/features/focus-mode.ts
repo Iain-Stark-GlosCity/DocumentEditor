@@ -16,6 +16,8 @@ import { isZenMode, setZenMode } from "../zen";
 
 /** Line width, in characters, that zen mode uses when no maximum is set. */
 export const ZEN_LINE_WIDTH = 80;
+/** Live preview reads as prose, so it gets a comfortable column unless the setting says otherwise. */
+export const LIVE_LINE_WIDTH = 88;
 
 const isBlank = (doc: Text, n: number) => /^\s*$/.test(doc.line(n).text);
 
@@ -138,14 +140,24 @@ function setZen(wb: Workbench, zen: boolean): void {
 
 export const focusMode: Feature = {
   id: "focus-mode",
-  reconfigureOn: ["editor.typewriterMode", "editor.focusMode", "editor.maxLineWidth"],
+  reconfigureOn: [
+    "editor.typewriterMode",
+    "editor.focusMode",
+    "editor.maxLineWidth",
+    "editor.viewMode",
+  ],
 
   editorExtensions: (_doc, wb) => {
     const extensions: Extension[] = [];
     if (wb.settings.get("editor.typewriterMode")) extensions.push(typewriterExtension());
     if (wb.settings.get("editor.focusMode")) extensions.push(focusExtension());
     const configured = wb.settings.get("editor.maxLineWidth");
-    const width = isZenMode(wb) ? configured || ZEN_LINE_WIDTH : configured;
+    const automatic = isZenMode(wb)
+      ? ZEN_LINE_WIDTH
+      : wb.settings.get("editor.viewMode") === "live"
+        ? LIVE_LINE_WIDTH
+        : 0;
+    const width = configured || automatic;
     if (width > 0) extensions.push(lineWidthExtension(width));
     return extensions;
   },
@@ -176,9 +188,30 @@ export const focusMode: Feature = {
   ],
 
   menuItems: [
-    { menu: "view", group: "5_focus", command: "view.toggleTypewriterMode", order: 1 },
-    { menu: "view", group: "5_focus", command: "view.toggleFocusMode", order: 2 },
-    { menu: "view", group: "5_focus", command: "view.toggleZenMode", order: 3 },
+    {
+      menu: "view",
+      group: "5_focus",
+      command: "view.toggleTypewriterMode",
+      order: 1,
+      label: "Typewriter mode",
+      checked: (wb) => wb.settings.get("editor.typewriterMode"),
+    },
+    {
+      menu: "view",
+      group: "5_focus",
+      command: "view.toggleFocusMode",
+      order: 2,
+      label: "Focus mode",
+      checked: (wb) => wb.settings.get("editor.focusMode"),
+    },
+    {
+      menu: "view",
+      group: "5_focus",
+      command: "view.toggleZenMode",
+      order: 3,
+      label: "Zen mode",
+      checked: (wb) => isZenMode(wb),
+    },
   ],
 
   activate(wb) {

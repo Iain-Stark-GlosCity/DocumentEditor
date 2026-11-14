@@ -2,22 +2,53 @@
 :root {
   color-scheme: light dark;
 
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  /* Segoe UI Variable on Windows 11; the system UI font elsewhere. */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  /* Source text. */
+  --font-mono:
+    "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono",
+    monospace;
+  /* Live preview prose. */
+  --font-prose:
+    "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Roboto, system-ui, -apple-system,
+    sans-serif;
+
+  --radius-sm: 4px;
+  --radius: 8px;
 
   --bg: #ffffff;
-  --bg-chrome: #f1f3f5;
+  --bg-chrome: #f3f4f6;
+  --bg-elevated: #ffffff;
   --bg-tab-active: #ffffff;
-  --bg-hover: #e4e7eb;
+  --bg-hover: #e5e8ec;
+  --bg-pressed: #d6dae0;
   --fg: #1b1f24;
   --fg-muted: #4b5563;
-  --border: #c5cad1;
+  --border: #d0d5dc;
+  --border-strong: #8a929e;
   --accent: #0b5cad;
   --accent-fg: #ffffff;
   --danger-bg: #fdecea;
   --danger-fg: #7a1a12;
   --focus: #0b5cad;
-  --backdrop: rgb(0 0 0 / 0.4);
+  --selection: rgb(11 92 173 / 0.22);
+  --shadow: 0 6px 20px rgb(0 0 0 / 0.14), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --backdrop: rgb(0 0 0 / 0.35);
+
+  /* Editor syntax. Text 4.5:1 or better on --bg; markers and front matter 4.5:1 too. */
+  --syn-heading: #0a3d75;
+  --syn-link: #0b5cad;
+  --syn-url: #596273;
+  --syn-marker: #6a7280;
+  --syn-meta: #6a7280;
+  --syn-quote: #4b5563;
+  --syn-code: #7a2a86;
+  --syn-code-bg: rgb(27 31 36 / 0.06);
+  --syn-keyword: #b0223a;
+  --syn-string: #1b6e3a;
+  --syn-number: #94460a;
+  --syn-fn: #6a2fa8;
+  --syn-type: #006a82;
 }
 
 /* The theme feature sets data-theme to "light" or "dark" (resolving "system"). Before it runs,
@@ -29,35 +60,73 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #14171b;
-  --bg-chrome: #1d2126;
+  --bg-chrome: #1c2025;
+  --bg-elevated: #232830;
   --bg-tab-active: #14171b;
-  --bg-hover: #2a3037;
+  --bg-hover: #2b3139;
+  --bg-pressed: #363d47;
   --fg: #e6e9ed;
   --fg-muted: #aab2bd;
-  --border: #3a414a;
+  --border: #353c45;
+  --border-strong: #6f7885;
   --accent: #6cb2ff;
   --accent-fg: #0b1220;
   --danger-bg: #3a1d1a;
   --danger-fg: #ffb4a9;
-  --focus: #6cb2ff;
-  --backdrop: rgb(0 0 0 / 0.6);
+  --focus: #7cbcff;
+  --selection: rgb(108 178 255 / 0.3);
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --backdrop: rgb(0 0 0 / 0.55);
+
+  --syn-heading: #a9d2ff;
+  --syn-link: #6cb2ff;
+  --syn-url: #94a0b0;
+  --syn-marker: #8f9aa9;
+  --syn-meta: #8f9aa9;
+  --syn-quote: #b4bcc7;
+  --syn-code: #dcb0ff;
+  --syn-code-bg: rgb(255 255 255 / 0.08);
+  --syn-keyword: #ff8f9f;
+  --syn-string: #93d69b;
+  --syn-number: #f2b27a;
+  --syn-fn: #cdb0ff;
+  --syn-type: #64d2ea;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --bg: #14171b;
-    --bg-chrome: #1d2126;
+    --bg-chrome: #1c2025;
+    --bg-elevated: #232830;
     --bg-tab-active: #14171b;
-    --bg-hover: #2a3037;
+    --bg-hover: #2b3139;
+    --bg-pressed: #363d47;
     --fg: #e6e9ed;
     --fg-muted: #aab2bd;
-    --border: #3a414a;
+    --border: #353c45;
+    --border-strong: #6f7885;
     --accent: #6cb2ff;
     --accent-fg: #0b1220;
     --danger-bg: #3a1d1a;
     --danger-fg: #ffb4a9;
-    --focus: #6cb2ff;
-    --backdrop: rgb(0 0 0 / 0.6);
+    --focus: #7cbcff;
+    --selection: rgb(108 178 255 / 0.3);
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --backdrop: rgb(0 0 0 / 0.55);
+
+    --syn-heading: #a9d2ff;
+    --syn-link: #6cb2ff;
+    --syn-url: #94a0b0;
+    --syn-marker: #8f9aa9;
+    --syn-meta: #8f9aa9;
+    --syn-quote: #b4bcc7;
+    --syn-code: #dcb0ff;
+    --syn-code-bg: rgb(255 255 255 / 0.08);
+    --syn-keyword: #ff8f9f;
+    --syn-string: #93d69b;
+    --syn-number: #f2b27a;
+    --syn-fn: #cdb0ff;
+    --syn-type: #64d2ea;
   }
 }
 

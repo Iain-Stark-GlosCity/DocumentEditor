@@ -16,6 +16,7 @@ import { syntaxTree } from "@codemirror/language";
 import { StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
 import { EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { buildDecorations } from "./builder";
+import { liveSourceSpans } from "./source-spans";
 import { ctrlClickLinks, openLinkAtCursor } from "./links";
 import type { EditorContext, FormatCommand } from "../../../core/format";
 import { liveOptions } from "./types";
@@ -187,7 +188,7 @@ const liveClass = EditorView.editorAttributes.of({ class: "cm-live" });
  * "open link" command works in source mode too.
  */
 export function liveExtensions(): Extension[] {
-  return [blockField, inlinePlugin, ctrlClickLinks, liveClass];
+  return [blockField, inlinePlugin, ctrlClickLinks, liveClass, liveSourceSpans];
 }
 
 /**

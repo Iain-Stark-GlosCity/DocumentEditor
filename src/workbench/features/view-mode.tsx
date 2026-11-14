@@ -58,23 +58,21 @@ function setMode(wb: Workbench, mode: ViewMode): void {
 }
 
 function commandsFor(wb: Workbench): Command[] {
-  const current = effectiveMode(wb);
-  const mark = (mode: ViewMode) => (mode === current ? " (current)" : "");
   return [
     {
       id: "view.sourceMode",
-      title: `Source mode${mark("source")}`,
+      title: "Source mode",
       run: () => setMode(wb, "source"),
     },
     {
       id: "view.liveMode",
-      title: `Live preview mode${mark("live")}`,
+      title: "Live preview mode",
       enabled: () => supportedModes(wb).includes("live"),
       run: () => setMode(wb, "live"),
     },
     {
       id: "view.cycleViewMode",
-      title: `Cycle view mode (now ${NAMES[current].toLowerCase()})`,
+      title: "Cycle view mode",
       defaultKey: "Alt-m",
       run: () => setMode(wb, nextMode(wb)),
     },
@@ -132,8 +130,32 @@ export const viewMode: Feature = {
   statusItems: [{ id: "view-mode", align: "right", order: 5, component: ViewModeStatus }],
 
   menuItems: [
-    { menu: "view", group: "4_mode", command: "view.sourceMode", order: 1 },
-    { menu: "view", group: "4_mode", command: "view.liveMode", order: 2 },
-    { menu: "view", group: "4_mode", command: "view.cycleViewMode", order: 3 },
+    {
+      menu: "view",
+      group: "4_mode",
+      command: "view.sourceMode",
+      order: 1,
+      submenu: "View mode",
+      label: "Source",
+      radio: true,
+      checked: (wb) => effectiveMode(wb) === "source",
+    },
+    {
+      menu: "view",
+      group: "4_mode",
+      command: "view.liveMode",
+      order: 2,
+      submenu: "View mode",
+      label: "Live preview",
+      radio: true,
+      checked: (wb) => effectiveMode(wb) === "live",
+    },
+    {
+      menu: "view",
+      group: "4_mode",
+      command: "view.cycleViewMode",
+      order: 3,
+      submenu: "View mode",
+    },
   ],
 };

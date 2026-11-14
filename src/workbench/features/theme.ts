@@ -8,6 +8,11 @@ const THEME_TITLES: Record<ThemeChoice, string> = {
   light: "Theme: light",
   dark: "Theme: dark",
 };
+const THEME_LABELS: Record<ThemeChoice, string> = {
+  system: "Follow system",
+  light: "Light",
+  dark: "Dark",
+};
 const CYCLE: readonly ThemeChoice[] = ["system", "light", "dark"];
 
 /** Sets `data-theme` on the root element; "system" follows the operating system live. */
@@ -51,5 +56,9 @@ export const theme: Feature = {
     group: "3_theme",
     command: `view.theme.${choice}`,
     order,
+    submenu: "Theme",
+    label: THEME_LABELS[choice],
+    radio: true,
+    checked: (wb) => wb.settings.get("appearance.theme") === choice,
   })),
 };

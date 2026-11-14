@@ -255,9 +255,9 @@ describe("lists", () => {
     expect(inline("- [ ] open\n- [x] done\n1. [X] numbered")).toEqual([
       'widget TaskWidget "- [ ]"',
       'widget TaskWidget "- [x]"',
-      'mark cm-live-task-done " done"',
+      'mark cm-live-task-done "done"',
       'widget TaskWidget "1. [X]"',
-      'mark cm-live-task-done " numbered"',
+      'mark cm-live-task-done "numbered"',
     ]);
   });
 
@@ -322,9 +322,18 @@ describe("front matter", () => {
 
 describe("tables, HTML and other blocks", () => {
   it("are left as source", () => {
-    expect(inline("| *a* | b |\n|---|---|\n| `c` | d |")).toEqual([]);
-    expect(inline("<div>\n*a*\n</div>")).toEqual([]);
-    expect(inline("[r]: http://x")).toEqual([]);
+    // Only a line class (monospace) is added; no inline decoration touches the text.
+    expect(inline("| *a* | b |\n|---|---|\n| `c` | d |")).toEqual([
+      "line 1 cm-live-source-block",
+      "line 2 cm-live-source-block",
+      "line 3 cm-live-source-block",
+    ]);
+    expect(inline("<div>\n*a*\n</div>")).toEqual([
+      "line 1 cm-live-source-block",
+      "line 2 cm-live-source-block",
+      "line 3 cm-live-source-block",
+    ]);
+    expect(inline("[r]: http://x")).toEqual(["line 1 cm-live-source-block"]);
   });
 });
 

@@ -1,0 +1,152 @@
+/* Editor syntax colours. The classes come from src/workbench/editor-highlight.ts; the colours are
+   the --syn-* tokens in theme.css. Rules later in the file win over earlier ones where a token
+   has several classes (a `#` is both part of a heading and a marker). */
+
+.cm-editor .tok-h1,
+.cm-editor .tok-h2,
+.cm-editor .tok-h3,
+.cm-editor .tok-h {
+  color: var(--syn-heading);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cm-editor .tok-h1 {
+  font-size: 1.3em;
+}
+
+.cm-editor .tok-h2 {
+  font-size: 1.18em;
+}
+
+.cm-editor .tok-h3 {
+  font-size: 1.08em;
+}
+
+.cm-editor .tok-strong {
+  font-weight: 700;
+}
+
+.cm-editor .tok-em {
+  font-style: italic;
+}
+
+.cm-editor .tok-strike {
+  text-decoration: line-through;
+  color: var(--syn-meta);
+}
+
+.cm-editor .tok-link {
+  color: var(--syn-link);
+}
+
+.cm-editor .tok-url {
+  color: var(--syn-url);
+}
+
+.cm-editor .tok-code {
+  color: var(--syn-code);
+  background: var(--syn-code-bg);
+  border-radius: 3px;
+}
+
+.cm-editor .tok-quote {
+  color: var(--syn-quote);
+}
+
+.cm-editor .tok-meta,
+.cm-editor .tok-comment {
+  color: var(--syn-meta);
+}
+
+.cm-editor .tok-comment {
+  font-style: italic;
+}
+
+.cm-editor .tok-keyword {
+  color: var(--syn-keyword);
+}
+
+.cm-editor .tok-string {
+  color: var(--syn-string);
+}
+
+.cm-editor .tok-number {
+  color: var(--syn-number);
+}
+
+.cm-editor .tok-fn {
+  color: var(--syn-fn);
+}
+
+.cm-editor .tok-type,
+.cm-editor .tok-prop {
+  color: var(--syn-type);
+}
+
+.cm-editor .tok-invalid {
+  color: var(--danger-fg);
+  text-decoration: underline wavy;
+}
+
+/* Markers (`#`, `**`, `>`, list bullets and numbers, fences, table pipes): quiet but legible.
+   Declared after the rest so a marker inside a heading or link keeps its quiet colour. */
+.cm-editor .tok-marker {
+  color: var(--syn-marker);
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Code blocks: the whole line is tinted, so the text itself needs no tint. */
+.cm-editor .cm-md-codeline {
+  background: var(--syn-code-bg);
+}
+
+.cm-editor .cm-md-codeline .tok-code {
+  background: none;
+  color: inherit;
+}
+
+/* Live preview draws its own code block background. */
+.cm-live .cm-md-codeline {
+  background: none;
+}
+
+/* Front matter reads as one muted block, whatever the grammar made of it. */
+.cm-editor .cm-md-frontmatter,
+.cm-editor .cm-md-frontmatter span {
+  color: var(--syn-meta);
+  font-size: 1em;
+  font-weight: 400;
+  font-style: normal;
+  background: none;
+  text-decoration: none;
+}
+
+/* Selection and caret follow the theme (CodeMirror's own are light-only). */
+.cm-editor .cm-selectionBackground {
+  background: var(--selection) !important;
+}
+
+.cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--selection) !important;
+}
+
+.cm-editor .cm-activeLine {
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  .cm-editor .tok-code {
+    background: none;
+  }
+
+  .cm-editor .tok-link {
+    color: LinkText;
+    text-decoration: underline;
+  }
+
+  .cm-editor .cm-selectionBackground {
+    background: Highlight !important;
+  }
+}
