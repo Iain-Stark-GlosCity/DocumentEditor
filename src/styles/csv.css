@@ -1,0 +1,217 @@
+/* CSV and TSV: column colours in the source editor and the table preview.
+
+   Eight muted hues, each 4.5:1 or better against the editor background in its theme. They are
+   tokens here, so the theme can change them. Delimiters are dimmed with the same marker colour the
+   other formats use (--syn-marker, 4.5:1 too). */
+
+:root {
+  --csv-c0: #0b5cad;
+  --csv-c1: #94460a;
+  --csv-c2: #1b6e3a;
+  --csv-c3: #7a2a86;
+  --csv-c4: #006a82;
+  --csv-c5: #b0223a;
+  --csv-c6: #6b5a00;
+  --csv-c7: #4a4fb5;
+  --csv-delim: var(--syn-marker);
+}
+
+:root[data-theme="dark"] {
+  --csv-c0: #6cb2ff;
+  --csv-c1: #f2b27a;
+  --csv-c2: #93d69b;
+  --csv-c3: #dcb0ff;
+  --csv-c4: #64d2ea;
+  --csv-c5: #ff8f9f;
+  --csv-c6: #d4c36a;
+  --csv-c7: #aab0ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --csv-c0: #6cb2ff;
+    --csv-c1: #f2b27a;
+    --csv-c2: #93d69b;
+    --csv-c3: #dcb0ff;
+    --csv-c4: #64d2ea;
+    --csv-c5: #ff8f9f;
+    --csv-c6: #d4c36a;
+    --csv-c7: #aab0ff;
+  }
+}
+
+.cm-editor .cm-csv-c0 {
+  color: var(--csv-c0);
+}
+.cm-editor .cm-csv-c1 {
+  color: var(--csv-c1);
+}
+.cm-editor .cm-csv-c2 {
+  color: var(--csv-c2);
+}
+.cm-editor .cm-csv-c3 {
+  color: var(--csv-c3);
+}
+.cm-editor .cm-csv-c4 {
+  color: var(--csv-c4);
+}
+.cm-editor .cm-csv-c5 {
+  color: var(--csv-c5);
+}
+.cm-editor .cm-csv-c6 {
+  color: var(--csv-c6);
+}
+.cm-editor .cm-csv-c7 {
+  color: var(--csv-c7);
+}
+
+.cm-editor .cm-csv-delim {
+  color: var(--csv-delim);
+}
+
+/* Preview table ------------------------------------------------------------------------- */
+
+/* A wide table scrolls inside the pane, so the pane is the scroller and the heading can stick to
+   its top. (The Markdown table rule makes a table its own scroll box, which would stop that.) */
+.preview-content:has(> .csv-table) {
+  max-width: none;
+  margin: 0;
+  padding: 0.75em 1em 3em;
+}
+
+.preview-content .csv-table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  overflow: visible;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9em;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-content .csv-table th,
+.preview-content .csv-table td {
+  max-width: 28em;
+  padding: 0.3em 0.7em;
+  border: 0;
+  border-right: 1px solid var(--preview-rule);
+  border-bottom: 1px solid var(--preview-rule);
+  text-align: left;
+  vertical-align: top;
+  /* Cells keep their own line breaks and long words wrap. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preview-content .csv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-chrome);
+  border-top: 1px solid var(--preview-rule);
+  border-bottom: 2px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+.preview-content .csv-table .csv-num {
+  text-align: right;
+}
+
+.preview-content .csv-table .csv-unnamed {
+  color: var(--fg-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.preview-content .csv-table .csv-rownum {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 3em;
+  background: var(--bg-chrome);
+  color: var(--fg-muted);
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The corner stays put in both directions. */
+.preview-content .csv-table thead .csv-rownum {
+  z-index: 3;
+}
+
+.preview-content .csv-table tbody tr:nth-child(even) td {
+  background: var(--preview-stripe);
+}
+
+/* A row with too many or too few fields: a tinted row, a mark beside its number and, in the
+   row's number cell, text for screen readers. Colour is never the only signal. */
+.preview-content .csv-table tr.csv-ragged td {
+  background: var(--danger-bg);
+}
+
+.preview-content .csv-table .csv-flag {
+  margin-left: 0.4em;
+  color: var(--danger-fg);
+  font-weight: 700;
+}
+
+.preview-content .csv-table .csv-missing {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 4px,
+    var(--preview-rule) 4px 5px
+  );
+}
+
+.preview-content .csv-table .csv-extra {
+  outline: 1px dashed var(--danger-fg);
+  outline-offset: -2px;
+}
+
+.preview-content .csv-note {
+  margin: 0 0 0.75em;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+.preview-content .csv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .cm-editor .cm-csv-c0,
+  .cm-editor .cm-csv-c1,
+  .cm-editor .cm-csv-c2,
+  .cm-editor .cm-csv-c3,
+  .cm-editor .cm-csv-c4,
+  .cm-editor .cm-csv-c5,
+  .cm-editor .cm-csv-c6,
+  .cm-editor .cm-csv-c7 {
+    color: CanvasText;
+  }
+
+  .cm-editor .cm-csv-delim {
+    color: GrayText;
+  }
+
+  .preview-content .csv-table th,
+  .preview-content .csv-table td {
+    border-color: CanvasText;
+  }
+
+  .preview-content .csv-table tr.csv-ragged td,
+  .preview-content .csv-table .csv-extra {
+    outline: 1px dashed CanvasText;
+    outline-offset: -2px;
+  }
+}
