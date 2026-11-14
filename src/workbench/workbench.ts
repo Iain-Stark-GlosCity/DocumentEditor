@@ -868,6 +868,7 @@ export class Workbench {
     return {
       setting: (key, fallback) => this.settings.getOr(key, fallback),
       setSetting: (key, value) => this.settings.setByKey(key, value),
+      notify: (text) => void this.notify({ message: text }),
     };
   }
 

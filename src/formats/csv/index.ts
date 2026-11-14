@@ -12,7 +12,9 @@ const cycleDelimiter: FormatCommand = {
     if (!host) return false;
     const current = host.setting<string>("csv.delimiter", "auto");
     const index = DELIMITER_CYCLE.findIndex((d) => d === current);
-    host.setSetting("csv.delimiter", DELIMITER_CYCLE[(index + 1) % DELIMITER_CYCLE.length]);
+    const next = DELIMITER_CYCLE[(index + 1) % DELIMITER_CYCLE.length] ?? "auto";
+    host.setSetting("csv.delimiter", next);
+    host.notify(`Delimiter: ${next === "auto" ? "detected automatically" : next}`);
     return true;
   },
 };

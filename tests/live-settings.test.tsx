@@ -95,6 +95,8 @@ describe("settings apply to open documents without reopening", () => {
     expect(wb.commands.get("csv.cycleDelimiter")?.enabled?.()).toBe(true);
     await act(() => wb.runCommand("csv.cycleDelimiter"));
     expect(wb.settings.get("csv.delimiter")).toBe("comma");
+    // The user is told what it changed to, since the effect is not always visible at once.
+    expect(wb.ui.getState().notifications.map((n) => n.message)).toContain("Delimiter: comma");
     // Comma finds one column, so there is no second colour.
     await waitFor(() => expect(document.querySelectorAll(".cm-csv-c1").length).toBe(0));
     for (const expected of ["semicolon", "tab", "pipe", "auto"] as const) {

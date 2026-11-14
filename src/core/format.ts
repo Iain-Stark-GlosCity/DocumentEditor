@@ -184,6 +184,8 @@ export interface CommandHost {
   setting<T>(key: string, fallback: T): T;
   /** Writes a setting. Throws if the key is unknown or the value is invalid for it. */
   setSetting(key: string, value: unknown): void;
+  /** Shows a short, non-modal message to the user, for example the new value of a setting. */
+  notify(message: string): void;
 }
 
 /** A labelled run of toolbar items. The toolbar draws a divider between groups. */
