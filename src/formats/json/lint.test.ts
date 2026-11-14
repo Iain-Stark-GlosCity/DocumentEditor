@@ -1,7 +1,13 @@
 import { jsonLanguage } from "@codemirror/lang-json";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { jsoncDiagnostics, maskComments, strictDiagnostics } from "./lint";
+import {
+  COMMENT_WARNING,
+  jsoncDiagnostics,
+  maskComments,
+  strictDiagnostics,
+  TRAILING_COMMA_WARNING,
+} from "./lint";
 
 const state = (text: string) => EditorState.create({ doc: text });
 
@@ -29,8 +35,44 @@ describe("strict JSON diagnostics", () => {
     expect(found[0]?.to).toBeGreaterThan(found[0]?.from ?? 0);
   });
 
-  it("rejects comments, which JSON does not have", async () => {
-    expect(await strictDiagnostics(state('// c\n{"a": 1}'))).toHaveLength(1);
+  it("reports comments as warnings, one each, at the comment", async () => {
+    const text = '// c\n{"a": 1 /* d */}';
+    const found = await strictDiagnostics(state(text));
+    expect(found.map((d) => [d.severity, text.slice(d.from, d.to)])).toEqual([
+      ["warning", "// c"],
+      ["warning", "/* d */"],
+    ]);
+    expect(found[0]?.message).toBe(COMMENT_WARNING);
+    expect(COMMENT_WARNING).toMatch(/Use \.jsonc to silence this\.$/);
+  });
+
+  it("reports trailing commas before } and ] as warnings, even with a comment between", async () => {
+    const text = '{"a": [1, 2,], "b": 3, // last\n}';
+    const found = await strictDiagnostics(state(text));
+    expect(found.map((d) => [d.severity, text.slice(d.from, d.to)])).toEqual([
+      ["warning", ","],
+      ["warning", ","],
+      ["warning", "// last"],
+    ]);
+    expect(found[0]?.message).toBe(TRAILING_COMMA_WARNING);
+  });
+
+  it("does not mistake text inside strings for comments or commas", async () => {
+    expect(await strictDiagnostics(state('{"u": "http://x", "c": ",}"}'))).toEqual([]);
+  });
+
+  it("keeps every error as an error when anything other than comments and commas is wrong", async () => {
+    for (const text of [
+      '// c\n{"a": ,}',
+      '{"a": 1,, }',
+      '{"a": 1 /* open',
+      "[1,] x",
+      '{"a": 1,} // ok\n{',
+    ]) {
+      const found = await strictDiagnostics(state(text));
+      expect(found.length).toBeGreaterThan(0);
+      expect(found.every((d) => d.severity === "error")).toBe(true);
+    }
   });
 });
 

@@ -7,7 +7,7 @@ import { dataEditing } from "../shared/data-editing";
 import { lazyLanguage } from "../shared/lazy-language";
 import { jsoncDiagnosticsFor, strictDiagnostics } from "./lint";
 import { jsonToolbar } from "./toolbar";
-import { formatJson, minifyJson, type WhitespaceOptions } from "./whitespace";
+import { formatJson, LENIENT, minifyJson, type WhitespaceOptions } from "./whitespace";
 
 /** What the commands need to know about the document and settings, read when they run. */
 interface JsonOptions extends WhitespaceOptions {
@@ -50,12 +50,23 @@ export const jsonCommands: readonly FormatCommand[] = [
     id: "json.format",
     title: "Format document",
     defaultKey: "Shift-Alt-f",
-    run: (view) => rewrite(view, (text, o) => formatJson(text, o.indent(), o)),
+    run: (view) =>
+      rewrite(
+        view,
+        (text, o) =>
+          formatJson(text, o.indent(), o) ??
+          // Strict `.json` with only comments or trailing commas (warnings) still formats.
+          (o.comments ? null : formatJson(text, o.indent(), LENIENT)),
+      ),
   },
   {
     id: "json.minify",
     title: "Minify",
-    run: (view) => rewrite(view, (text, o) => minifyJson(text, o)),
+    run: (view) =>
+      rewrite(
+        view,
+        (text, o) => minifyJson(text, o) ?? (o.comments ? null : minifyJson(text, LENIENT)),
+      ),
   },
 ];
 
@@ -66,6 +77,7 @@ export const jsonProvider: TextFormatProvider = {
   fileExtensions: ["json", "jsonc", "geojson"],
   viewModes: ["source"],
   spellcheck: false,
+  settings: ["json.indent", "json.lint"],
   commands: jsonCommands,
   toolbar: jsonToolbar,
   editorExtensions(context) {

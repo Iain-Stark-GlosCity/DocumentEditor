@@ -83,6 +83,50 @@ function firstErrorOffset(text: string, parser: Parser): number | null {
   return at;
 }
 
+export const COMMENT_WARNING =
+  "Comments are not valid in strict JSON, but many tools accept them (tsconfig.json, VS Code settings). Use .jsonc to silence this.";
+export const TRAILING_COMMA_WARNING =
+  "Trailing commas are not valid in strict JSON, but many tools accept them (tsconfig.json, VS Code settings). Use .jsonc to silence this.";
+
+/**
+ * Where the comments and the trailing commas of a text are. A trailing comma is one whose next
+ * token (past whitespace and comments) is `}` or `]`.
+ */
+function leniencies(text: string): { comments: [number, number][]; commas: number[] } | null {
+  if (maskComments(text).unterminated !== null) return null;
+  const comments: [number, number][] = [];
+  const commas: number[] = [];
+  let pendingComma = -1;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text.charAt(i);
+    if (ch === '"') {
+      let end = i + 1;
+      while (end < text.length && text.charAt(end) !== '"' && text.charAt(end) !== "\n") {
+        end += text.charAt(end) === "\\" ? 2 : 1;
+      }
+      i = Math.min(text.length, end + 1);
+      pendingComma = -1;
+    } else if (ch === "/" && (text.charAt(i + 1) === "/" || text.charAt(i + 1) === "*")) {
+      let end: number;
+      if (text.charAt(i + 1) === "/") {
+        end = text.indexOf("\n", i);
+        if (end < 0) end = text.length;
+      } else {
+        end = text.indexOf("*/", i + 2) + 2;
+      }
+      comments.push([i, end]);
+      i = end;
+    } else {
+      if (ch === ",") pendingComma = i;
+      else if ((ch === "}" || ch === "]") && pendingComma >= 0) commas.push(pendingComma);
+      if (ch !== "," && !/\s/.test(ch)) pendingComma = -1;
+      i++;
+    }
+  }
+  return { comments, commas };
+}
+
 /**
  * Strict JSON: one diagnostic, with the message of `JSON.parse` (through `jsonParseLinter`). Some
  * engines word the message without a position ("Unexpected token ',' ... is not valid JSON"),
@@ -92,11 +136,45 @@ export async function strictDiagnostics(state: EditorState): Promise<Diagnostic[
   const text = state.doc.toString();
   if (text.trim() === "") return [];
   const { jsonParseLinter, jsonLanguage } = await import("@codemirror/lang-json");
+  const errors = strictErrors(state, text, jsonParseLinter, jsonLanguage.parser);
+  if (errors.length === 0) return [];
+  // Comments and trailing commas are what tsconfig.json and VS Code settings legitimately
+  // contain. When they are the ONLY problem, they are warnings. Any other problem keeps the
+  // strict errors, unchanged.
+  const found = leniencies(text);
+  if (found === null || found.comments.length + found.commas.length === 0) return errors;
+  const cleaned = text.split("");
+  for (const [from, to] of found.comments) {
+    for (let k = from; k < to; k++) if (cleaned[k] !== "\n") cleaned[k] = " ";
+  }
+  for (const at of found.commas) cleaned[at] = " ";
+  const rest = jsoncDiagnostics(cleaned.join(""), jsonLanguage.parser);
+  if (rest.length > 0) return errors;
+  return [
+    ...found.comments.map(([from, to]) => ({
+      ...widen(from, to, text.length),
+      severity: "warning" as const,
+      message: COMMENT_WARNING,
+    })),
+    ...found.commas.map((at) => ({
+      ...widen(at, at + 1, text.length),
+      severity: "warning" as const,
+      message: TRAILING_COMMA_WARNING,
+    })),
+  ].sort((a, b) => a.from - b.from);
+}
+
+function strictErrors(
+  state: EditorState,
+  text: string,
+  jsonParseLinter: typeof import("@codemirror/lang-json").jsonParseLinter,
+  parser: Parser,
+): Diagnostic[] {
   // The linter reads only `state.doc` of the view it is given.
   const found = jsonParseLinter()({ state } as Parameters<ReturnType<typeof jsonParseLinter>>[0]);
   return found.map((d) => {
     const positioned = /at position \d+|at line \d+ column \d+/.test(d.message);
-    const at = positioned ? null : firstErrorOffset(text, jsonLanguage.parser);
+    const at = positioned ? null : firstErrorOffset(text, parser);
     return { ...d, ...widen(at ?? d.from, at === null ? d.to : at, text.length) };
   });
 }

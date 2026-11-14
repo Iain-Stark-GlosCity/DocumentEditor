@@ -67,7 +67,7 @@ test("a large entity used many times is not expanded", async ({ app }) => {
   const text = `<!DOCTYPE l [<!ENTITY x "${"a".repeat(10_000)}">]><l>${"&x;".repeat(10_000)}</l>`;
   await openFile(app, "/demo/big.xml", text);
   await expect(app.locator(".cm-lint-marker-warning")).toBeVisible();
-  await expect(problems(app)).toHaveText("1 problem");
+  await expect(problems(app)).toHaveText("1 warning");
 });
 
 test("a very long line offers Tidy, which splits it quickly", async ({ app }) => {

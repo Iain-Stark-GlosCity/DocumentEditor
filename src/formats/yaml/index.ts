@@ -18,6 +18,7 @@ export const yamlProvider: TextFormatProvider = {
   fileExtensions: ["yaml", "yml"],
   viewModes: ["source"],
   spellcheck: false,
+  settings: ["yaml.lint"],
   editorExtensions: (context) => [
     language(),
     dataEditing({ indent: 2, closeBrackets: true }),

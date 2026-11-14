@@ -45,6 +45,14 @@ export interface TextFormatProvider {
    */
   readonly spellcheck?: boolean;
 
+  /**
+   * Keys of the settings that `editorExtensions` reads when the extensions are BUILT (to pick
+   * what to include, or to bake in a value such as an indent unit). The workbench rebuilds the
+   * extensions of every open document of this format when one of them changes. Settings read
+   * lazily, inside a function the extensions call later, need not be listed.
+   */
+  readonly settings?: readonly string[];
+
   /** CodeMirror extensions for this format in the given mode (language, keymaps, decorations). */
   editorExtensions(context: EditorContext): Extension[];
 
@@ -163,8 +171,19 @@ export interface FormatCommand {
    * not apply to the command.
    */
   active?(state: EditorState): boolean;
-  /** Returns true if the command applied. */
-  run(view: EditorView): boolean;
+  /**
+   * Returns true if the command applied. `host` lets the command read and write settings; a
+   * command that does not need it can ignore it.
+   */
+  run(view: EditorView, host?: CommandHost): boolean;
+}
+
+/** What the workbench offers a format command beyond the editor view. */
+export interface CommandHost {
+  /** Reads a setting by key, with the command's own default. */
+  setting<T>(key: string, fallback: T): T;
+  /** Writes a setting. Throws if the key is unknown or the value is invalid for it. */
+  setSetting(key: string, value: unknown): void;
 }
 
 /** A labelled run of toolbar items. The toolbar draws a divider between groups. */

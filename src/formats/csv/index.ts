@@ -1,6 +1,21 @@
-import type { TextFormatProvider } from "../../core/format";
+import type { FormatCommand, TextFormatProvider } from "../../core/format";
 import { csvColumns } from "./colour";
 import { resolveDelimiter } from "./parse";
+
+const DELIMITER_CYCLE = ["auto", "comma", "semicolon", "tab", "pipe"] as const;
+
+/** Moves `csv.delimiter` to the next choice. The delimiter is a `settings` key, so it applies live. */
+const cycleDelimiter: FormatCommand = {
+  id: "csv.cycleDelimiter",
+  title: "Cycle CSV delimiter",
+  run(_view, host) {
+    if (!host) return false;
+    const current = host.setting<string>("csv.delimiter", "auto");
+    const index = DELIMITER_CYCLE.findIndex((d) => d === current);
+    host.setSetting("csv.delimiter", DELIMITER_CYCLE[(index + 1) % DELIMITER_CYCLE.length]);
+    return true;
+  },
+};
 
 /**
  * CSV and TSV. Source mode colours the columns; the split preview is a table. The table builder
@@ -14,6 +29,8 @@ export const csvProvider: TextFormatProvider = {
   fileExtensions: ["csv", "tsv"],
   viewModes: ["source", "split"],
   spellcheck: false,
+  settings: ["csv.delimiter"],
+  commands: [cycleDelimiter],
   editorExtensions: (context) => [
     csvColumns(context.setting<string>("csv.delimiter", "auto"), context.path),
   ],

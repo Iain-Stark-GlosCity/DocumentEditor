@@ -4,7 +4,6 @@
  */
 import type { Feature } from "../feature";
 import { autosave } from "./autosave";
-import { csv } from "./csv";
 import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
 import { externalChanges } from "./external-changes";
@@ -61,7 +60,6 @@ export const defaultFeatures: readonly Feature[] = [
   wordCount,
   images,
   viewMode,
-  csv,
   problems,
   longLines,
 ];

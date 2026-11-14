@@ -16,6 +16,7 @@ import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { CommandRegistry } from "../core/commands";
 import { createDocumentsStore, type DocumentsStore, type OpenDocument } from "../core/documents";
+import type { CommandHost } from "../core/format";
 import type { FormatRegistry } from "../core/registry";
 import { SettingsStore } from "../core/settings";
 import { minimalEdit } from "../core/text-diff";
@@ -218,6 +219,7 @@ export class Workbench {
   private readonly saving = new Map<string, Promise<void>>();
   private readonly autosaveHolds = new Map<string, Set<string>>();
   private knownDocuments = new Map<string, OpenDocument>();
+  private readonly formatSettingStops = new Map<string, Unsubscribe>();
   private readonly opens = new Set<Promise<void>>();
   private nextId = 1;
   private settingsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -258,6 +260,8 @@ export class Workbench {
     this.knownDocuments = new Map(this.documents.getState().documents.map((d) => [d.id, d]));
     stops.push(this.documents.subscribe(() => this.onDocumentsChanged()));
     this.refreshDirty();
+    this.syncFormatSettings();
+    stops.push(() => this.stopFormatSettings());
 
     this.registerProviderCommands(stops);
     for (const feature of this.features) this.activateFeature(feature, stops);
@@ -859,6 +863,60 @@ export class Workbench {
     }
   }
 
+  /** The settings access a format command gets as its second argument. */
+  private commandHost(): CommandHost {
+    return {
+      setting: (key, fallback) => this.settings.getOr(key, fallback),
+      setSetting: (key, value) => this.settings.setByKey(key, value),
+    };
+  }
+
+  /**
+   * Keeps one settings subscription per format that has open documents and declares `settings`.
+   * A change to one of its keys rebuilds that format's editor extensions in its open documents.
+   * A format with no open document has no subscription.
+   */
+  private syncFormatSettings(): void {
+    if (!this.stops) return;
+    const open = new Set(this.documents.getState().documents.map((d) => d.providerId));
+    for (const [id, stop] of this.formatSettingStops) {
+      if (open.has(id)) continue;
+      stop();
+      this.formatSettingStops.delete(id);
+    }
+    for (const id of open) {
+      if (this.formatSettingStops.has(id)) continue;
+      const keys = this.registry.byId(id)?.settings;
+      if (!keys || keys.length === 0) continue;
+      this.formatSettingStops.set(
+        id,
+        this.settings.subscribeAll((key) => {
+          if (keys.includes(key)) this.reconfigureProviderOf(id);
+        }),
+      );
+    }
+  }
+
+  private stopFormatSettings(): void {
+    for (const stop of this.formatSettingStops.values()) stop();
+    this.formatSettingStops.clear();
+  }
+
+  /** Rebuilds the provider extensions of every open document of one format. */
+  private reconfigureProviderOf(providerId: string): void {
+    for (const doc of this.documents.getState().documents) {
+      if (doc.providerId !== providerId) continue;
+      const effect = this.reconfigureEffect("provider", doc);
+      if (!effect) continue;
+      if (this.view && this.shownId === doc.id) {
+        this.view.dispatch({ effects: effect });
+        continue;
+      }
+      const state = this.buffers.get(doc.id);
+      if (state) this.buffers.set(doc.id, state.update({ effects: effect }).state);
+    }
+  }
+
   /** Commands declared by a format provider run against the editor while its document is active. */
   private registerProviderCommands(stops: Unsubscribe[]): void {
     for (const provider of this.registry.all()) {
@@ -875,7 +933,7 @@ export class Workbench {
               enabled: () =>
                 active() && (!command.enabled || !this.view || command.enabled(this.view.state)),
               run: () => {
-                if (this.view) command.run(this.view);
+                if (this.view) command.run(this.view, this.commandHost());
               },
             }),
           );
@@ -952,6 +1010,7 @@ export class Workbench {
       return before !== undefined && before.providerId !== d.providerId;
     });
     this.knownDocuments = current;
+    this.syncFormatSettings();
     // A new format changes the provider's extensions and anything that reads the format (such
     // as spellcheck), so rebuild them for that document, keeping its text, cursor and history.
     for (const doc of switched) this.reconfigureDocument(doc);
