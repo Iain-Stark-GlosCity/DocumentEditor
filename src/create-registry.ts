@@ -6,12 +6,16 @@
  */
 import { FormatRegistry } from "./core/registry";
 import { markdownProvider } from "./formats/markdown";
+import { jsonProvider } from "./formats/json";
 import { plainTextProvider } from "./formats/plain-text";
+import { yamlProvider } from "./formats/yaml";
 
 export function createRegistry(): FormatRegistry {
   const registry = new FormatRegistry();
   // A new document starts as Markdown; a file nobody claims opens as plain text.
   registry.register(markdownProvider, { default: true });
   registry.register(plainTextProvider, { fallback: true });
+  registry.register(jsonProvider);
+  registry.register(yamlProvider);
   return registry;
 }

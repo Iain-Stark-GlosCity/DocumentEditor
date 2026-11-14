@@ -86,6 +86,12 @@ export const SETTINGS_SCHEMA = {
   "markdown.moveLines": bool(true),
   "markdown.autoPair": bool(true),
   "markdown.pasteUrlAsLink": bool(true),
+  /** Check JSON for syntax errors as you type. */
+  "json.lint": bool(true),
+  /** Spaces per level when formatting JSON. */
+  "json.indent": num(2, 1, 8, true),
+  /** Check YAML for syntax errors as you type. */
+  "yaml.lint": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),
   "files.autoSaveDelayMs": num(1500, 100, 600_000, true),
   "files.recoveryIntervalMs": num(3000, 100, 600_000, true),

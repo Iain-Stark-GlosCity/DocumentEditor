@@ -1,0 +1,331 @@
+/*
+ * Problems and structure in the editor: squiggles, gutter markers, tooltips, the problems panel,
+ * the status bar count, the fold gutter and bracket matching. Colours come from the theme tokens
+ * in theme.css plus three severity tokens below.
+ *
+ * Severity is never shown by colour alone. Squiggles differ in line style (wavy, dashed, dotted),
+ * gutter markers in shape (circle, triangle, square) and the panel and tooltip rows begin with
+ * the word for the severity. Every severity colour is at least 3:1 against the editor
+ * background, in both themes. CodeMirror's own lint theme draws squiggles and markers with
+ * inline SVG images in fixed colours, so they are switched off here and redrawn in CSS.
+ * Its selectors carry a generated scope class; `.cm-editor` in front of ours is enough to win
+ * on specificity where the property is not marked !important below.
+ */
+
+:root {
+  --lint-error: #b3261e; /* 6.5:1 on --bg */
+  --lint-warning: #8a5300; /* 6.2:1 */
+  --lint-info: #0b5cad; /* 6.5:1 */
+}
+
+:root[data-theme="dark"] {
+  --lint-error: #ff8a80; /* 7.9:1 on --bg */
+  --lint-warning: #f0b040; /* 9.4:1 */
+  --lint-info: #6cb2ff; /* 7.6:1 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --lint-error: #ff8a80;
+    --lint-warning: #f0b040;
+    --lint-info: #6cb2ff;
+  }
+}
+
+/* Squiggles --------------------------------------------------------------------------------- */
+
+.cm-editor .cm-lintRange {
+  background-image: none;
+  padding-bottom: 0;
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.cm-editor .cm-lintRange-error {
+  background-image: none;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--lint-error);
+}
+
+.cm-editor .cm-lintRange-warning {
+  background-image: none;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--lint-warning);
+}
+
+.cm-editor .cm-lintRange-info,
+.cm-editor .cm-lintRange-hint {
+  background-image: none;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--lint-info);
+}
+
+.cm-editor .cm-lintRange-active {
+  background-color: var(--selection);
+}
+
+/* A diagnostic with no width: a small triangle under the position. */
+.cm-editor .cm-lintPoint::after {
+  border-bottom-color: var(--lint-error);
+}
+
+.cm-editor .cm-lintPoint-warning::after {
+  border-bottom-color: var(--lint-warning);
+}
+
+.cm-editor .cm-lintPoint-info::after,
+.cm-editor .cm-lintPoint-hint::after {
+  border-bottom-color: var(--lint-info);
+}
+
+/* Gutter markers: a circle for an error, a triangle for a warning, a square for the rest. ----- */
+
+.cm-editor .cm-lint-marker {
+  content: none;
+  box-sizing: border-box;
+  width: 0.8em;
+  height: 0.8em;
+  margin: 0.2em auto 0;
+  background: var(--lint-info);
+}
+
+.cm-editor .cm-lint-marker-error {
+  content: none;
+  border-radius: 50%;
+  background: var(--lint-error);
+}
+
+.cm-editor .cm-lint-marker-warning {
+  content: none;
+  background: var(--lint-warning);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.cm-editor .cm-lint-marker-info,
+.cm-editor .cm-lint-marker-hint {
+  content: none;
+}
+
+.cm-editor .cm-gutter-lint {
+  width: 1.2em;
+}
+
+/* Tooltips and the problems panel ------------------------------------------------------------ */
+
+.cm-tooltip.cm-tooltip-hover,
+.cm-tooltip:has(> .cm-tooltip-lint) {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+
+.cm-tooltip-lint {
+  max-width: 36em;
+}
+
+.cm-editor .cm-diagnostic {
+  border-left-width: 5px;
+  border-left-style: solid;
+  padding: 4px 8px;
+  font-family: var(--font-ui);
+}
+
+.cm-editor .cm-diagnostic::before {
+  font-weight: 700;
+  margin-right: 0.4em;
+}
+
+.cm-editor .cm-diagnostic-error {
+  border-left-color: var(--lint-error);
+}
+
+.cm-editor .cm-diagnostic-error::before {
+  content: "Error:";
+}
+
+.cm-editor .cm-diagnostic-warning {
+  border-left-color: var(--lint-warning);
+  border-left-style: dashed;
+}
+
+.cm-editor .cm-diagnostic-warning::before {
+  content: "Warning:";
+}
+
+.cm-editor .cm-diagnostic-info,
+.cm-editor .cm-diagnostic-hint {
+  border-left-color: var(--lint-info);
+  border-left-style: dotted;
+}
+
+.cm-editor .cm-diagnostic-info::before {
+  content: "Note:";
+}
+
+.cm-editor .cm-diagnostic-hint::before {
+  content: "Hint:";
+}
+
+/* CodeMirror docks panels in `.cm-panels`, which search.css keeps at zero height for the find
+   widget at the top. The problems panel sits at the bottom and needs real space. */
+.cm-editor .cm-panels-bottom {
+  height: auto;
+  overflow: visible;
+  pointer-events: auto;
+  background: var(--bg-elevated) !important;
+  color: var(--fg);
+  border-top: 1px solid var(--border-strong) !important;
+}
+
+.cm-editor .cm-panel.cm-panel-lint {
+  font-family: var(--font-ui);
+  font-size: 0.9em;
+}
+
+.cm-editor .cm-panel.cm-panel-lint ul {
+  max-height: 9em;
+}
+
+.cm-editor .cm-panel.cm-panel-lint ul:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.cm-editor .cm-panel.cm-panel-lint ul [aria-selected] {
+  background-color: var(--bg-hover) !important;
+  color: var(--fg) !important;
+  outline: 1px solid var(--border-strong);
+  outline-offset: -1px;
+}
+
+.cm-editor .cm-panel.cm-panel-lint ul:focus [aria-selected] {
+  background-color: var(--selection) !important;
+  outline: 2px solid var(--focus);
+}
+
+.cm-editor .cm-panel.cm-panel-lint [name="close"] {
+  color: var(--fg);
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 1.2em;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.cm-editor .cm-panel.cm-panel-lint [name="close"]:hover {
+  background: var(--bg-hover);
+}
+
+.cm-editor .cm-panel.cm-panel-lint [name="close"]:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+/* Status bar count --------------------------------------------------------------------------- */
+
+.problems-button {
+  padding: 0 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.problems-button:hover {
+  background: var(--bg-hover);
+}
+
+.problems-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* Fold gutter and bracket matching ------------------------------------------------------------ */
+
+.cm-editor .cm-foldGutter {
+  width: 1.1em;
+}
+
+.cm-editor .cm-foldGutter .cm-gutterElement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+.cm-editor .cm-foldGutter .cm-gutterElement:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.cm-editor .cm-foldPlaceholder {
+  background: var(--syn-code-bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.cm-editor .cm-matchingBracket {
+  background-color: var(--selection) !important;
+  outline: 1px solid var(--border-strong);
+}
+
+.cm-editor .cm-nonmatchingBracket {
+  background-color: transparent !important;
+  text-decoration: underline wavy var(--lint-error);
+  text-underline-offset: 3px;
+}
+
+/* High contrast: system colours. Line styles and marker shapes still tell severities apart. --- */
+
+@media (forced-colors: active) {
+  .cm-editor .cm-lintRange-error,
+  .cm-editor .cm-lintRange-warning,
+  .cm-editor .cm-lintRange-info,
+  .cm-editor .cm-lintRange-hint,
+  .cm-editor .cm-nonmatchingBracket {
+    text-decoration-color: CanvasText;
+  }
+
+  .cm-editor .cm-lint-marker {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  .cm-editor .cm-diagnostic {
+    border-left-color: CanvasText;
+  }
+
+  .cm-editor .cm-panels-bottom,
+  .cm-tooltip.cm-tooltip-hover,
+  .cm-tooltip:has(> .cm-tooltip-lint) {
+    background: Canvas !important;
+    color: CanvasText;
+    border: 1px solid CanvasText !important;
+    box-shadow: none;
+  }
+
+  .cm-editor .cm-matchingBracket {
+    background: transparent !important;
+    outline: 2px solid CanvasText;
+  }
+
+  .cm-editor .cm-panel.cm-panel-lint ul [aria-selected] {
+    background: Highlight !important;
+    color: HighlightText !important;
+    forced-color-adjust: none;
+  }
+
+  .problems-button {
+    border-color: ButtonBorder;
+  }
+}
