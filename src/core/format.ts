@@ -68,6 +68,13 @@ export interface TextFormatProvider {
    */
   readonly toolbar?: readonly ToolbarGroup[];
 
+  /**
+   * Id of one of this format's `commands` that breaks very long lines up (a tidy or format
+   * command). When a document of the format opens with a line over 50,000 characters, the
+   * workbench offers it in a notification, because editors slow down on such lines.
+   */
+  readonly longLineCommand?: string;
+
   /** Export targets (HTML, PDF and so on). */
   readonly exporters?: readonly Exporter[];
 

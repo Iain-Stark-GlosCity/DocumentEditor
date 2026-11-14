@@ -94,6 +94,10 @@ export const SETTINGS_SCHEMA = {
   "json.lint": bool(true),
   /** Spaces per level when formatting JSON. */
   "json.indent": num(2, 1, 8, true),
+  /** Check XML for well-formedness as you type. */
+  "xml.lint": bool(true),
+  /** Spaces per level when tidying XML. */
+  "xml.indent": num(2, 1, 8, true),
   /** Check YAML for syntax errors as you type. */
   "yaml.lint": bool(true),
   "files.autoSave": oneOf(["off", "afterDelay", "onFocusChange"], "off"),

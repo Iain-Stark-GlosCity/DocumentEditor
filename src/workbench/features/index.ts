@@ -18,6 +18,7 @@ import { recovery } from "./recovery";
 import { ribbon } from "./ribbon";
 import { help } from "./help";
 import { images } from "./images";
+import { longLines } from "./long-lines";
 import { preview } from "./preview";
 import { problems } from "./problems";
 import { spellcheck } from "./spellcheck";
@@ -58,4 +59,5 @@ export const defaultFeatures: readonly Feature[] = [
   viewMode,
   csv,
   problems,
+  longLines,
 ];
