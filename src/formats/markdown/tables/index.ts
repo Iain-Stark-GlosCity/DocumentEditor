@@ -7,7 +7,8 @@ import { EditorView, keymap } from "@codemirror/view";
 import type { FormatCommand } from "../../../core/format";
 import * as actions from "./actions";
 
-import { findTable } from "./editor";
+import { cellAt, findTable } from "./editor";
+import type { Align } from "./model";
 
 export { findTable };
 export { parseTable, serialiseTable } from "./model";
@@ -54,15 +55,25 @@ export function tableExtensions(autoFormat: () => boolean): Extension[] {
 const cursorInTable = (state: EditorState): boolean =>
   findTable(state, state.selection.main.head) !== null;
 
+/** Is the column under the cursor aligned this way? */
+const columnAligned =
+  (align: Align): FormatCommand["active"] =>
+  (state) => {
+    const loc = findTable(state, state.selection.main.head);
+    return !!loc && loc.model.align[cellAt(state, loc, state.selection.main.head).col] === align;
+  };
+
 const command = (
   id: string,
   title: string,
   run: (view: EditorView) => boolean,
   enabled: FormatCommand["enabled"] | null = cursorInTable,
+  active?: FormatCommand["active"],
 ): FormatCommand => ({
   id: `markdown.table.${id}`,
   title,
   ...(enabled ? { enabled } : {}),
+  ...(active ? { active } : {}),
   run,
 });
 
@@ -85,9 +96,27 @@ export const tableCommands: readonly FormatCommand[] = [
   command("moveRowDown", "Move table row down", (v) => actions.moveRow(v, 1)),
   command("moveColumnLeft", "Move table column left", (v) => actions.moveColumn(v, -1)),
   command("moveColumnRight", "Move table column right", (v) => actions.moveColumn(v, 1)),
-  command("alignLeft", "Align table column left", (v) => actions.setAlignment(v, "left")),
-  command("alignCentre", "Centre table column", (v) => actions.setAlignment(v, "center")),
-  command("alignRight", "Align table column right", (v) => actions.setAlignment(v, "right")),
+  command(
+    "alignLeft",
+    "Align table column left",
+    (v) => actions.setAlignment(v, "left"),
+    cursorInTable,
+    columnAligned("left"),
+  ),
+  command(
+    "alignCentre",
+    "Centre table column",
+    (v) => actions.setAlignment(v, "center"),
+    cursorInTable,
+    columnAligned("center"),
+  ),
+  command(
+    "alignRight",
+    "Align table column right",
+    (v) => actions.setAlignment(v, "right"),
+    cursorInTable,
+    columnAligned("right"),
+  ),
   command("alignNone", "Clear table column alignment", (v) => actions.setAlignment(v, "none")),
   command("sortAscending", "Sort table by column, ascending", (v) =>
     actions.sortByColumn(v, "asc"),

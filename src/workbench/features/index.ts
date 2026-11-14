@@ -13,14 +13,13 @@ import { fileCommands } from "./file-commands";
 import { outline } from "./outline";
 import { paneFocus } from "./pane-focus";
 import { recovery } from "./recovery";
-import { formatMenu } from "./format-menu";
+import { ribbon } from "./ribbon";
 import { help } from "./help";
 import { images } from "./images";
 import { preview } from "./preview";
 import { spellcheck } from "./spellcheck";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
-import { tableMenu } from "./table-menu";
 import { tabs } from "./tabs";
 import { theme } from "./theme";
 import { uiCommands } from "./ui-commands";
@@ -31,7 +30,7 @@ import { wordCount } from "./word-count";
 export const defaultFeatures: readonly Feature[] = [
   fileCommands,
   editCommands,
-  formatMenu,
+  ribbon,
   editorAppearance,
   find,
   theme,
@@ -51,7 +50,6 @@ export const defaultFeatures: readonly Feature[] = [
   preview,
   spellcheck,
   wordCount,
-  tableMenu,
   images,
   viewMode,
 ];

@@ -27,7 +27,7 @@ export interface StatusItem {
 }
 
 /**
- * Places a registered command in a menu. `menu` is `file`, `edit`, `format`, `view` or `help` (any other
+ * Places a registered command in a menu. `menu` is `file`, `edit`, `view` or `help` (any other
  * id creates a new menu before Help). Groups are separated by dividers and sorted by name, so
  * prefix them with a number to control order, for example `1_new`.
  */

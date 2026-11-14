@@ -6,6 +6,7 @@ import { markdownImage, markdownLink } from "./images";
 import { liveCommands, markdownViewExtensions } from "./live";
 import { outlineFromState } from "./outline";
 import { tableCommands, tableExtensions } from "./tables";
+import { markdownToolbar } from "./toolbar";
 
 /**
  * The unified pipeline is large, so it is loaded when a render is first requested (CLAUDE.md
@@ -27,6 +28,7 @@ export const markdownProvider: TextFormatProvider = {
   fileExtensions: ["md", "markdown", "mdown", "mkd"],
   viewModes: ["source", "live", "split"],
   commands: [...markdownFormatCommands, ...liveCommands, ...tableCommands],
+  toolbar: markdownToolbar,
   imageSyntax: markdownImage,
   linkSyntax: markdownLink,
   editorExtensions: (context) => [

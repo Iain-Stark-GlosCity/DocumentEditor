@@ -72,6 +72,8 @@ export const SETTINGS_SCHEMA = {
   "editor.maxLineWidth": num(0, 0, 400, true),
   "outline.visible": bool(false),
   "ui.paneSizes": paneSizes(),
+  /** The formatting ribbon between the menu bar and the tabs. */
+  "ui.ribbon": bool(true),
   "markdown.tables.autoFormat": bool(true),
   "preview.syncScroll": bool(true),
   "preview.loadRemoteImages": bool(true),

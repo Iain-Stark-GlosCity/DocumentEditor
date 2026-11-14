@@ -8,7 +8,13 @@
  */
 import type { FormatCommand } from "../../../core/format";
 import {
+  bulletListActive,
+  codeBlockActive,
   decreaseHeading,
+  headingActive,
+  numberedListActive,
+  selectionQuoted,
+  taskListActive,
   increaseHeading,
   insertHorizontalRule,
   setHeading,
@@ -22,6 +28,11 @@ import {
   selectionHasTask,
 } from "./blocks";
 import {
+  boldActive,
+  inlineCodeActive,
+  italicActive,
+  linkActive,
+  strikethroughActive,
   toggleBold,
   toggleInlineCode,
   toggleItalic,
@@ -31,35 +42,67 @@ import {
 import { indentListItem, moveListItemDown, moveListItemUp, outdentListItem } from "./lists";
 import type { EditCommand } from "./syntax";
 
-function command(id: string, title: string, run: EditCommand, defaultKey?: string): FormatCommand {
-  return { id: `markdown.${id}`, title, ...(defaultKey ? { defaultKey } : {}), run };
+function command(
+  id: string,
+  title: string,
+  run: EditCommand,
+  defaultKey?: string,
+  active?: FormatCommand["active"],
+): FormatCommand {
+  return {
+    id: `markdown.${id}`,
+    title,
+    ...(defaultKey ? { defaultKey } : {}),
+    ...(active ? { active } : {}),
+    run,
+  };
 }
 
 const headings = ([1, 2, 3, 4, 5, 6] as const).map((level) =>
-  command(`heading${level}`, `Heading ${level}`, setHeading(level), `Mod-${level}`),
+  command(
+    `heading${level}`,
+    `Heading ${level}`,
+    setHeading(level),
+    `Mod-${level}`,
+    headingActive(level),
+  ),
 );
 
 export const markdownFormatCommands: readonly FormatCommand[] = [
-  command("toggleBold", "Bold", toggleBold, "Mod-b"),
-  command("toggleItalic", "Italic", toggleItalic, "Mod-i"),
-  command("toggleStrikethrough", "Strikethrough", toggleStrikethrough, "Mod-Shift-x"),
-  command("toggleInlineCode", "Inline code", toggleInlineCode, "Mod-e"),
-  command("insertLink", "Link", toggleLink, "Mod-k"),
+  command("toggleBold", "Bold", toggleBold, "Mod-b", boldActive),
+  command("toggleItalic", "Italic", toggleItalic, "Mod-i", italicActive),
+  command(
+    "toggleStrikethrough",
+    "Strikethrough",
+    toggleStrikethrough,
+    "Mod-Shift-x",
+    strikethroughActive,
+  ),
+  command("toggleInlineCode", "Inline code", toggleInlineCode, "Mod-e", inlineCodeActive),
+  command("insertLink", "Link", toggleLink, "Mod-k", linkActive),
   ...headings,
-  command("paragraph", "Paragraph", setParagraph, "Mod-Shift-0"),
+  command("paragraph", "Paragraph", setParagraph, "Mod-Shift-0", headingActive(0)),
   command("increaseHeading", "Increase heading level", increaseHeading),
   command("decreaseHeading", "Decrease heading level", decreaseHeading),
-  command("toggleBlockquote", "Blockquote", toggleBlockquote, "Mod-Shift-."),
-  command("toggleBulletList", "Bulleted list", toggleBulletList, "Mod-Shift-8"),
-  command("toggleNumberedList", "Numbered list", toggleNumberedList, "Mod-Shift-7"),
-  command("toggleTaskList", "Task list", toggleTaskList, "Mod-Shift-9"),
+  command("toggleBlockquote", "Blockquote", toggleBlockquote, "Mod-Shift-.", (state) =>
+    selectionQuoted(state),
+  ),
+  command("toggleBulletList", "Bulleted list", toggleBulletList, "Mod-Shift-8", bulletListActive),
+  command(
+    "toggleNumberedList",
+    "Numbered list",
+    toggleNumberedList,
+    "Mod-Shift-7",
+    numberedListActive,
+  ),
+  command("toggleTaskList", "Task list", toggleTaskList, "Mod-Shift-9", taskListActive),
   {
     // Only on a task line: elsewhere Mod-Enter belongs to the editor (a blank line below, or
     // "leave the table" inside one), so the key must not be claimed here.
     ...command("toggleTaskChecked", "Mark task done or not done", toggleTaskChecked, "Mod-Enter"),
     enabled: selectionHasTask,
   },
-  command("toggleCodeBlock", "Code block", toggleCodeBlock),
+  command("toggleCodeBlock", "Code block", toggleCodeBlock, undefined, codeBlockActive),
   command("insertHorizontalRule", "Horizontal rule", insertHorizontalRule),
   command("indentListItem", "Indent list item", indentListItem),
   command("outdentListItem", "Outdent list item", outdentListItem),

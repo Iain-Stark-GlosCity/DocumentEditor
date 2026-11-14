@@ -11,8 +11,10 @@ import { EditorPane } from "./EditorPane";
 import { EmptyState } from "./EmptyState";
 import type { Feature } from "./feature";
 import { defaultFeatures } from "./features";
+import { useSetting } from "./hooks";
 import { MenuBar } from "./MenuBar";
 import { Notifications } from "./Notifications";
+import { Ribbon } from "./Ribbon";
 import { EditorArea } from "./SidePanes";
 import { StatusBar } from "./StatusBar";
 import { PANEL_ID, tabId, TabStrip } from "./TabStrip";
@@ -54,10 +56,12 @@ export function App(props: AppProps) {
   const dialog = useStore(workbench.ui, (s) => s.dialogs[0] ?? null);
   // Zen mode hides the chrome; the command palette and dialogs still work.
   const zen = useZenMode(workbench);
+  const showRibbon = useSetting(workbench, "ui.ribbon");
 
   return (
     <div className={zen ? "app app--zen" : "app"}>
       {!zen && <MenuBar workbench={workbench} />}
+      {!zen && showRibbon && <Ribbon workbench={workbench} />}
       {!zen && (
         <TabStrip
           documents={documents}

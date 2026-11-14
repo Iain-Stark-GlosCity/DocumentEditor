@@ -45,6 +45,13 @@ export interface TextFormatProvider {
   /** Commands contributed by the format (bold, insert table and so on). */
   readonly commands?: readonly FormatCommand[];
 
+  /**
+   * The formatting toolbar (the ribbon) for documents of this format: groups of buttons that
+   * name commands by id. Labels, tooltips and shortcuts come from the command registry, so
+   * nothing is repeated here. Omit for a format with no toolbar.
+   */
+  readonly toolbar?: readonly ToolbarGroup[];
+
   /** Export targets (HTML, PDF and so on). */
   readonly exporters?: readonly Exporter[];
 
@@ -115,8 +122,59 @@ export interface FormatCommand {
    * document of the format is open.
    */
   enabled?(state: EditorState): boolean;
+  /**
+   * Whether the formatting this command applies is already present at the selection (the cursor
+   * is in bold text, the lines are a bulleted list and so on). Drives the pressed state of a
+   * toolbar button. Must be cheap: it runs after every selection change. Omit if the idea does
+   * not apply to the command.
+   */
+  active?(state: EditorState): boolean;
   /** Returns true if the command applied. */
   run(view: EditorView): boolean;
+}
+
+/** A labelled run of toolbar items. The toolbar draws a divider between groups. */
+export interface ToolbarGroup {
+  /** Stable id, for example `text`. */
+  id: string;
+  /** Accessible name of the group, for example `Text`. Not drawn as visible text. */
+  label: string;
+  /**
+   * Whether the group shows at the current selection (a table group while the cursor is in a
+   * table). Omit for a group that is always shown. Put such groups last so that they appear
+   * without moving the others.
+   */
+  visible?(state: EditorState): boolean;
+  items: readonly ToolbarItem[];
+}
+
+export type ToolbarItem = ToolbarButton | ToolbarSelect;
+
+/** An icon button that runs a registered command. */
+export interface ToolbarButton {
+  /** Id of a registered command. The button is left out if the command is not registered. */
+  command: string;
+  /**
+   * SVG path data (the `d` attribute) drawn in a 16 by 16 box, stroked with the current text
+   * colour. Supplied by the provider so the workbench has no format-specific icons.
+   */
+  icon: string;
+}
+
+/** A compact drop-down that shows which option applies and runs the command of the one chosen. */
+export interface ToolbarSelect {
+  /** Accessible name of the control, for example `Block type`. */
+  label: string;
+  options: readonly ToolbarOption[];
+}
+
+export interface ToolbarOption {
+  /** Id of a registered command. */
+  command: string;
+  /** Text shown for the option, for example `Heading 1`. */
+  label: string;
+  /** Whether this option describes the selection. The first that does is shown on the control. */
+  active?(state: EditorState): boolean;
 }
 
 export interface Exporter {
