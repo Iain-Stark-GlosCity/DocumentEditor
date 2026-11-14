@@ -19,6 +19,7 @@ import { ribbon } from "./ribbon";
 import { help } from "./help";
 import { images } from "./images";
 import { preview } from "./preview";
+import { problems } from "./problems";
 import { spellcheck } from "./spellcheck";
 import { statusCursor } from "./status-cursor";
 import { statusFormat } from "./status-format";
@@ -56,4 +57,5 @@ export const defaultFeatures: readonly Feature[] = [
   images,
   viewMode,
   csv,
+  problems,
 ];

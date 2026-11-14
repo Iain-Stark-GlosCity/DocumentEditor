@@ -83,6 +83,9 @@ describe("menu bar", () => {
       "Typewriter mode",
       "Focus mode",
       "Zen modeCtrl+Alt+Z",
+      "ProblemsCtrl+Shift+M",
+      "Go to next problemF8",
+      "Go to previous problemShift+F8",
       "Command paletteCtrl+Shift+P",
       "Word count",
     ]);

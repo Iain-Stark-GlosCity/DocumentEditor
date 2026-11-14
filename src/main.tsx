@@ -12,6 +12,7 @@ import "./styles/live.css";
 import "./styles/ribbon.css";
 import "./styles/format-switcher.css";
 import "./styles/csv.css";
+import "./styles/lint.css";
 import { App } from "./workbench/App";
 
 const registry = createRegistry();

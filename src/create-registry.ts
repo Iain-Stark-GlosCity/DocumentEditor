@@ -7,8 +7,10 @@
 import { FormatRegistry } from "./core/registry";
 import { csvProvider } from "./formats/csv";
 import { markdownProvider } from "./formats/markdown";
+import { jsonProvider } from "./formats/json";
 import { plainTextProvider } from "./formats/plain-text";
 import { htmlProvider } from "./formats/html";
+import { yamlProvider } from "./formats/yaml";
 
 export function createRegistry(): FormatRegistry {
   const registry = new FormatRegistry();
@@ -17,5 +19,7 @@ export function createRegistry(): FormatRegistry {
   registry.register(plainTextProvider, { fallback: true });
   registry.register(csvProvider);
   registry.register(htmlProvider);
+  registry.register(jsonProvider);
+  registry.register(yamlProvider);
   return registry;
 }
