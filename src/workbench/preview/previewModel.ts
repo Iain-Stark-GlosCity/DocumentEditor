@@ -51,7 +51,8 @@ export class PreviewModel {
     const offText = this.workbench.onDidChangeText((change) => {
       if (change.docId === this.workbench.documents.getState().activeId) this.schedule();
     });
-    // Covers switching tabs and "Save as", which changes the path that images resolve against.
+    // Covers switching tabs, "Save as" (which changes the path that images resolve against) and
+    // changing the document's format.
     const offDocuments = this.workbench.documents.subscribe(() => this.checkDocument());
     // A change to one of the provider's own settings (for example `markdown.math`) changes the
     // HTML, so render again at once.
@@ -76,7 +77,7 @@ export class PreviewModel {
 
   private checkDocument(): void {
     const doc = this.workbench.activeDocument();
-    const key = doc ? `${doc.id}|${doc.path ?? ""}` : null;
+    const key = doc ? `${doc.id}|${doc.path ?? ""}|${doc.providerId}` : null;
     if (key === this.key) return;
     this.key = key;
     // A different document must not show the last one's preview while it renders.

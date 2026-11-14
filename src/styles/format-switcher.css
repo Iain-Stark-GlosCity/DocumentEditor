@@ -1,0 +1,48 @@
+/* The format button in the status bar, and the tick in the quick pick. */
+.format-button {
+  padding: 0 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.format-button:hover {
+  background: var(--bg-hover);
+}
+
+.format-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.quick-pick-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-pick-tick {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  color: var(--accent);
+}
+
+/* Spoken by screen readers through the tick; drawn only where the tick cannot be seen. */
+.quick-pick-current {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .quick-pick-tick {
+    color: CanvasText;
+  }
+}

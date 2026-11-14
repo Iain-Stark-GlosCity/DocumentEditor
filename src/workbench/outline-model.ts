@@ -103,8 +103,18 @@ export class OutlineModel {
     this.docId = this.workbench.documents.getState().activeId;
     this.compute();
     const off = this.workbench.onEditorUpdate((update) => this.onUpdate(update));
+    // Changing the document's format changes what counts as a heading (or whether there are any).
+    let providerId = this.workbench.activeDocument()?.providerId;
+    const offDocuments = this.workbench.documents.subscribe(() => {
+      const next = this.workbench.activeDocument()?.providerId;
+      if (next === providerId) return;
+      providerId = next;
+      this.retries = 0;
+      this.refresh();
+    });
     return () => {
       off();
+      offDocuments();
       this.cancel();
     };
   }

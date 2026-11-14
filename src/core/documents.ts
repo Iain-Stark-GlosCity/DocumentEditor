@@ -33,6 +33,12 @@ export interface DocumentsState {
   /** Adopts what is on disk as the saved state (after a reload, or when it matches the buffer). */
   applyDisk(id: string, data: FileData): void;
   setMissing(id: string, missing: boolean): void;
+  /**
+   * Changes which format provider a document is treated as. Text, path, saved text and encoding
+   * are untouched, so a switch never makes a document dirty or clean. Does nothing for an
+   * unknown document or when the provider is unchanged.
+   */
+  setProvider(id: string, providerId: string): void;
   close(id: string): void;
   setActive(id: string): void;
 }
@@ -134,6 +140,13 @@ export function createDocumentsStore(): DocumentsStore {
             ? { ...d, missingOnDisk: missing }
             : d,
         ),
+      }));
+    },
+
+    setProvider(id, providerId) {
+      if (!get().documents.some((d) => d.id === id && d.providerId !== providerId)) return;
+      set((s) => ({
+        documents: s.documents.map((d) => (d.id === id ? { ...d, providerId } : d)),
       }));
     },
 
