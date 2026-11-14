@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
@@ -16,6 +16,7 @@ use thiserror::Error;
 use crate::assets::asset_dirs_for;
 use crate::atomic::atomic_write;
 use crate::binary::{self, BinaryError};
+use crate::recovery::RecoverySnapshot;
 use crate::textfile::{self, FileFormat};
 use crate::watch::{event_is_for, watch_target, CASE_INSENSITIVE};
 
@@ -68,15 +69,6 @@ pub struct FileData {
 pub struct WriteResult {
     #[serde(rename = "modifiedMs")]
     modified_ms: u64,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RecoverySnapshot {
-    id: String,
-    path: Option<String>,
-    text: String,
-    #[serde(rename = "savedMs")]
-    saved_ms: u64,
 }
 
 #[derive(Serialize, Clone)]

@@ -51,6 +51,8 @@ export interface RecoverySnapshot {
   path: string | null;
   text: string;
   savedMs: number;
+  /** The format the document was in. Absent in snapshots written by older versions. */
+  providerId?: string;
 }
 
 /** URL schemes `Platform.openExternal` will hand to the operating system. */

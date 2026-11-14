@@ -63,6 +63,9 @@ describe("MemoryPlatform", () => {
     const p = new MemoryPlatform();
     await p.writeRecovery({ id: "d1", path: null, text: "draft", savedMs: 1 });
     expect(await p.listRecovery()).toEqual([{ id: "d1", path: null, text: "draft", savedMs: 1 }]);
+    await p.writeRecovery({ id: "d2", path: null, text: "{}", savedMs: 2, providerId: "json" });
+    expect((await p.listRecovery()).find((s) => s.id === "d2")?.providerId).toBe("json");
+    await p.clearRecovery("d2");
     await p.clearRecovery("d1");
     expect(await p.listRecovery()).toEqual([]);
   });
