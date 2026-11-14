@@ -8,6 +8,7 @@ import "./styles/syntax.css";
 import "./styles/search.css";
 import "./styles/preview.css";
 import "./styles/outline.css";
+import "./styles/parts.css";
 import "./styles/live.css";
 import "./styles/ribbon.css";
 import "./styles/format-switcher.css";

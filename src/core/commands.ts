@@ -15,6 +15,12 @@ export interface Command {
   nativeKey?: boolean;
   /** Menus and the palette disable the command when this returns false. Default: enabled. */
   enabled?(): boolean;
+  /**
+   * Called when the command's key is pressed while the command is disabled. Return true to say
+   * the key was dealt with (for example by explaining why) so it does not fall through to the
+   * editor or browser. Menus and the palette ignore it.
+   */
+  onDisabledKey?(): boolean;
   run(): void | Promise<void>;
 }
 

@@ -28,6 +28,14 @@ describe("shouldAutosave", () => {
     expect(shouldAutosave({ ...base, mode: "onFocusChange", trigger: "focus" })).toBe(true);
     expect(shouldAutosave({ ...base, trigger: "focus" })).toBe(false);
   });
+  it("skips a part of a container and a read-only document", () => {
+    expect(shouldAutosave({ ...base, path: "/a.docx!/word/document.xml" })).toBe(false);
+    expect(
+      shouldAutosave({ ...base, mode: "onFocusChange", trigger: "focus", path: "/a.docx!/x.xml" }),
+    ).toBe(false);
+    expect(shouldAutosave({ ...base, readOnly: true })).toBe(false);
+    expect(shouldAutosave({ ...base, readOnly: false })).toBe(true);
+  });
   it("labels the modes", () => {
     expect(autosaveStateLabel("off")).toBe("off");
     expect(autosaveStateLabel("afterDelay")).toBe("after delay");
@@ -51,6 +59,24 @@ describe("autosave feature", () => {
     await settle(1);
     expect(platform.files.get("/a.md")?.text).toBe("two\n");
     expect(workbench.isDirty(id)).toBe(false);
+  });
+
+  it("leaves a part of a container to a manual save", async () => {
+    vi.useFakeTimers();
+    const part = "/a.docx!/word/document.xml";
+    const { platform, workbench, id } = await boot({
+      features: [autosave],
+      files: { [part]: "<w:p>" },
+      open: [part],
+    });
+    workbench.settings.set("files.autoSave", "afterDelay");
+    workbench.settings.set("files.autoSaveDelayMs", 1000);
+    workbench.replaceText(id, "<w:p></w:p>");
+    await settle(5000);
+    expect(platform.files.get(part)?.text).toBe("<w:p>");
+    expect(workbench.isDirty(id)).toBe(true);
+    await workbench.save(id);
+    expect(platform.files.get(part)?.text).toBe("<w:p></w:p>");
   });
 
   it("restarts the delay on every edit", async () => {

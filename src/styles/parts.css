@@ -1,0 +1,160 @@
+/* The Parts pane (parts of a container file) and the read-only markers. */
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-chrome);
+}
+
+.parts-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parts-filter {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.parts-button {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.parts-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.parts-button:disabled {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
+.parts-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.parts-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding-block: 3px;
+  padding-inline-end: 8px;
+  cursor: pointer;
+}
+
+.parts-item:hover {
+  background: var(--bg-hover);
+}
+
+.parts-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.parts-item[aria-current="location"] {
+  background: var(--bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.parts-item--container {
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+/* Binary parts are dimmed, and also say "binary" in words, so colour is never the only cue. */
+.parts-item--binary .parts-name {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.parts-twisty {
+  flex: none;
+  width: 1em;
+  color: var(--fg-muted);
+}
+
+.parts-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.parts-meta {
+  flex: none;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.parts-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-muted);
+}
+
+.parts-error {
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+}
+
+.parts-error p {
+  margin: 0 0 8px;
+}
+
+.read-only-status {
+  cursor: help;
+}
+
+.tab-lock {
+  margin-inline-start: 4px;
+  font-size: 10px;
+}
+
+@media (forced-colors: active) {
+  .parts-item[aria-current="location"] {
+    forced-color-adjust: none;
+    color: HighlightText;
+    background: Highlight;
+    box-shadow: none;
+  }
+
+  .parts-item[aria-current="location"] .parts-meta,
+  .parts-item[aria-current="location"] .parts-twisty,
+  .parts-item[aria-current="location"] .parts-name {
+    color: HighlightText;
+  }
+
+  .parts-item:focus-visible {
+    outline: 2px solid CanvasText;
+  }
+
+  .parts-item--binary .parts-name {
+    color: GrayText;
+  }
+
+  .parts-error {
+    border: 1px solid CanvasText;
+  }
+}

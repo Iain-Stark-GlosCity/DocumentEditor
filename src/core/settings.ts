@@ -71,6 +71,8 @@ export const SETTINGS_SCHEMA = {
   /** In characters; 0 means the text uses the full width. */
   "editor.maxLineWidth": num(0, 0, 400, true),
   "outline.visible": bool(false),
+  /** The Parts pane, shown whenever the open file is a container (a DOCX and the like). */
+  "parts.visible": bool(true),
   "ui.paneSizes": paneSizes(),
   /** The formatting ribbon between the menu bar and the tabs. */
   "ui.ribbon": bool(true),

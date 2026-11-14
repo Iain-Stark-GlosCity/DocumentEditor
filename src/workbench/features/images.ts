@@ -114,7 +114,7 @@ type Insertion =
 /** Inserts into the document's editor as one undoable transaction. False if it is not shown. */
 function insertText(wb: Workbench, docId: string, text: string, where: Insertion): boolean {
   const view = wb.activeView();
-  if (!view || wb.activeDocument()?.id !== docId) return false;
+  if (!view || wb.activeDocument()?.id !== docId || view.state.readOnly) return false;
   const { state } = view;
   if (where.kind === "selection") {
     view.dispatch({

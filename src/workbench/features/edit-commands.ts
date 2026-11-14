@@ -35,10 +35,12 @@ export const editCommands: Feature = {
       const text = selectedText(view);
       if (text === "") return;
       await writeClipboard(text);
-      if (cut) view.dispatch({ ...view.state.replaceSelection(""), userEvent: "delete.cut" });
+      if (cut && !view.state.readOnly)
+        view.dispatch({ ...view.state.replaceSelection(""), userEvent: "delete.cut" });
     };
 
     const paste = async (view: EditorView) => {
+      if (view.state.readOnly) return;
       let text: string;
       try {
         text = await navigator.clipboard.readText();

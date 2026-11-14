@@ -5,6 +5,7 @@ export const fileCommands: Feature = {
   id: "file-commands",
   commands: (wb) => {
     const hasDocument = () => wb.activeDocument() !== null;
+    const isReadOnly = () => wb.isReadOnly(wb.activeDocument());
     return [
       { id: "file.new", title: "New file", defaultKey: "Mod-n", run: () => void wb.newFile() },
       { id: "file.open", title: "Open file…", defaultKey: "Mod-o", run: () => wb.openDialog() },
@@ -12,7 +13,14 @@ export const fileCommands: Feature = {
         id: "file.save",
         title: "Save",
         defaultKey: "Mod-s",
-        enabled: hasDocument,
+        // Disabled for a view-only document; its key still explains why instead of falling
+        // through to the browser's own Save page dialog.
+        enabled: () => hasDocument() && !isReadOnly(),
+        onDisabledKey: () => {
+          if (!isReadOnly()) return false;
+          wb.notify({ message: "This view is read-only. Use Save as… to keep a text copy." });
+          return true;
+        },
         run: async () => void (await wb.save()),
       },
       {

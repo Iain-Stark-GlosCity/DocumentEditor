@@ -68,6 +68,7 @@ export function App(props: AppProps) {
           documents={documents}
           activeId={activeId}
           dirty={dirty}
+          readOnly={new Set(documents.filter((d) => workbench.isReadOnly(d)).map((d) => d.id))}
           onSelect={(id) => workbench.documents.getState().setActive(id)}
           onClose={(id) => void workbench.closeDocument(id)}
         />
