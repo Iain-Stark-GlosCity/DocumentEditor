@@ -476,3 +476,16 @@
     border-color: ButtonText;
   }
 }
+
+/* ===== HTML format preview ===== */
+/* The one note at the top of an HTML preview. It carries no data-line, so scroll sync ignores it. */
+.preview-content .html-preview-note {
+  margin: 0 0 1.25em;
+  padding: 0.3em 0.75em;
+  font: 0.8em/1.5 var(--font-ui);
+  color: var(--fg-muted);
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* ===== end HTML format preview ===== */

@@ -100,12 +100,12 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   }
 }
 
-interface FileData {
+export interface FileData {
   context?: RenderContext;
 }
 
 /** Walk hast elements depth-first without pulling in a visitor library. */
-function walkElements(node: Nodes, visit: (element: Element, parent: Nodes) => void): void {
+export function walkElements(node: Nodes, visit: (element: Element, parent: Nodes) => void): void {
   if (!("children" in node)) return;
   for (const child of node.children) {
     if (child.type === "element") visit(child, node);
@@ -132,7 +132,7 @@ function rehypeDataLines() {
 }
 
 /** Send relative image sources through `resolveAsset`. Links are left as written. */
-function rehypeResolveAssets() {
+export function rehypeResolveAssets() {
   return (tree: HastRoot, file: { data: FileData }) => {
     const context = file.data.context;
     if (!context) return;
@@ -151,7 +151,7 @@ function rehypeResolveAssets() {
  * at them, which would break footnote links. Prefix those links, only where the target id exists
  * in this document, so other links stay as written.
  */
-function rehypeFragmentLinks() {
+export function rehypeFragmentLinks() {
   return (tree: HastRoot) => {
     const prefix = sanitiseSchema.clobberPrefix ?? "";
     const ids = new Set<string>();
