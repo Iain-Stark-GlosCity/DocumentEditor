@@ -49,9 +49,11 @@ export class TauriPlatform implements Platform {
     return call<FileData>("read_file", { path });
   }
 
-  async readBinaryFile(): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
-    // The Rust command arrives with the container platform; until then nothing asks for it.
-    throw new Error("Reading binary files is not available yet");
+  async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+    // The command returns `tauri::ipc::Response`, so the bytes arrive as an ArrayBuffer.
+    const buffer = await call<ArrayBuffer>("read_binary_file", { path });
+    const stat = await this.statFile(path);
+    return { bytes: new Uint8Array(buffer), modifiedMs: stat?.modifiedMs ?? 0 };
   }
 
   statFile(path: string): Promise<{ modifiedMs: number } | null> {

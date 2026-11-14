@@ -22,6 +22,6 @@ if (!root) throw new Error("Missing #root element");
 
 createRoot(root).render(
   <StrictMode>
-    <App platform={getPlatform()} registry={registry} />
+    <App platform={getPlatform(registry)} registry={registry} />
   </StrictMode>,
 );
