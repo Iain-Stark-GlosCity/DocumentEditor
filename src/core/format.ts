@@ -28,6 +28,11 @@ export interface TextFormatProvider {
   readonly fileExtensions: readonly string[];
   /** View modes this format supports. Must include `source`. */
   readonly viewModes: readonly ViewMode[];
+  /**
+   * Set to false for formats where spell-checking is only noise (data and code). The user's own
+   * spellcheck setting still applies to every other format. Default true.
+   */
+  readonly spellcheck?: boolean;
 
   /** CodeMirror extensions for this format in the given mode (language, keymaps, decorations). */
   editorExtensions(context: EditorContext): Extension[];

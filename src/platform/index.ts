@@ -17,6 +17,13 @@ This is a sample Markdown file, shown because the app is running in a plain brow
 - [ ] Write something
 `;
 
+declare global {
+  interface Window {
+    /** The in-memory platform of the browser-only build, so browser tests can open other files. */
+    __demoPlatform?: MemoryPlatform;
+  }
+}
+
 let cached: Platform | undefined;
 
 function insideTauri(): boolean {
@@ -37,6 +44,8 @@ export function getPlatform(): Platform {
       mixedEol: false,
     });
     memory.requestOpen([SAMPLE_PATH]);
+    // Only the browser-only build has this; the desktop app never sets it.
+    if (typeof window !== "undefined") window.__demoPlatform = memory;
     cached = memory;
   }
   return cached;

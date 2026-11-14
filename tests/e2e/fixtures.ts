@@ -48,3 +48,23 @@ export async function documentText(page: Page): Promise<string> {
     .locator(".cm-line")
     .evaluateAll((lines) => lines.map((line) => line.textContent ?? "").join("\n"));
 }
+
+/**
+ * Opens a file in the browser-only build, as if it had been passed to the app ("Open with"). The
+ * in-memory platform there is exposed as `window.__demoPlatform` for exactly this.
+ */
+export async function openFile(page: Page, path: string, text: string): Promise<void> {
+  await page.evaluate(
+    ({ path, text }) => {
+      const platform = window.__demoPlatform;
+      if (!platform) throw new Error("This is not the browser-only build");
+      platform.seedFile(path, text);
+      platform.requestOpen([path]);
+    },
+    { path, text },
+  );
+  const name = path.split(/[\\/]/).pop() ?? path;
+  await page
+    .getByRole("tab", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) })
+    .waitFor();
+}

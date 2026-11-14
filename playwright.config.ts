@@ -4,7 +4,9 @@ import { defineConfig } from "@playwright/test";
  * End-to-end smoke tests against the production build, served by `vite preview`. Without Tauri
  * the app runs on its in-memory platform with a sample document. `npm run test:e2e` builds first.
  */
-const PORT = 4173;
+// Set E2E_PORT to run several copies of the suite side by side (for example in separate working
+// copies), so they do not fight over one port.
+const PORT = Number(process.env.E2E_PORT ?? 4173);
 
 export default defineConfig({
   testDir: "tests/e2e",

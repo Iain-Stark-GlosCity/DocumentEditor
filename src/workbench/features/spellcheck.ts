@@ -8,9 +8,13 @@ import type { Feature } from "../feature";
 export const spellcheck: Feature = {
   id: "spellcheck",
   reconfigureOn: ["editor.spellcheck"],
-  editorExtensions: (_doc, wb) =>
+  editorExtensions: (doc, wb) =>
     EditorView.contentAttributes.of({
-      spellcheck: wb.settings.get("editor.spellcheck") ? "true" : "false",
+      spellcheck:
+        wb.settings.get("editor.spellcheck") &&
+        wb.registry.byId(doc.providerId)?.spellcheck !== false
+          ? "true"
+          : "false",
       autocorrect: "off",
       autocapitalize: "off",
     }),
