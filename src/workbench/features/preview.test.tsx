@@ -221,9 +221,9 @@ describe("links", () => {
   });
 
   it("only names the target of a link to any other local file", async () => {
-    const { platform, workbench } = await setup(markdownish, "[sheet](data.csv)\n");
+    const { platform, workbench } = await setup(markdownish, "[sheet](data.dat)\n");
     await click("sheet");
-    expect(await screen.findByText("Link target: C:\\docs\\data.csv")).toBeTruthy();
+    expect(await screen.findByText("Link target: C:\\docs\\data.dat")).toBeTruthy();
     expect(platform.openedUrls).toEqual([]);
     expect(workbench.activeDocument()?.path).toBe(NOTE);
   });
