@@ -61,6 +61,7 @@ describe("menu bar", () => {
       "Select all occurrencesCtrl+Shift+L",
       "Go to lineCtrl+G",
       "Spellcheck",
+      "Change format…",
       "Insert image…",
     ]);
     expect(textsOf("View")).toEqual([

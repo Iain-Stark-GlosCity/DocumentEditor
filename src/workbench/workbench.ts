@@ -43,6 +43,30 @@ export interface PendingDialog extends DialogRequest {
   resolve(value: string): void;
 }
 
+/** One choice in a quick pick. */
+export interface PickItem<T = string> {
+  value: T;
+  label: string;
+  /** Secondary text shown after the label, for example a file extension. */
+  detail?: string;
+  /** Marks the current choice with a tick. */
+  checked?: boolean;
+}
+
+export interface PickOptions {
+  /** Accessible name of the dialog, for example `Change format`. */
+  title: string;
+  placeholder?: string;
+  /** Shown when the filter matches nothing. */
+  emptyMessage?: string;
+}
+
+export interface PendingPick extends PickOptions {
+  id: number;
+  items: readonly PickItem<unknown>[];
+  resolve(value: unknown): void;
+}
+
 export interface NotificationAction {
   label: string;
   run(): void;
@@ -67,6 +91,8 @@ export interface UiState {
   dialogs: PendingDialog[];
   notifications: Notification[];
   paletteOpen: boolean;
+  /** The quick pick being shown (see `Workbench.pick`), or null. */
+  pick: PendingPick | null;
   /** Incremented to ask the menu bar to take keyboard focus. */
   menuFocusRequest: number;
 }
@@ -171,6 +197,7 @@ export class Workbench {
     dialogs: [],
     notifications: [],
     paletteOpen: false,
+    pick: null,
     menuFocusRequest: 0,
   }));
 
@@ -280,6 +307,7 @@ export class Workbench {
     const stops = this.stops;
     if (!stops) return;
     this.stops = null;
+    this.ui.getState().pick?.resolve(null);
     if (this.settingsTimer !== null) {
       clearTimeout(this.settingsTimer);
       this.settingsTimer = null;
@@ -321,6 +349,31 @@ export class Workbench {
 
   dismissNotification(id: number): void {
     this.ui.setState((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) }));
+  }
+
+  /**
+   * Shows a modal list the user can filter and choose from. Resolves with the chosen item's
+   * value, or null if it was dismissed. A pick that is already open is dismissed first.
+   */
+  pick<T>(items: readonly PickItem<T>[], options: PickOptions): Promise<T | null> {
+    this.ui.getState().pick?.resolve(null);
+    return new Promise<T | null>((resolve) => {
+      const pending: PendingPick = {
+        ...options,
+        id: this.nextId++,
+        items,
+        resolve: resolve as (value: unknown) => void,
+      };
+      this.ui.setState({ pick: pending });
+    });
+  }
+
+  /** Called by the quick pick component. */
+  resolvePick(id: number, value: unknown): void {
+    const pending = this.ui.getState().pick;
+    if (!pending || pending.id !== id) return;
+    this.ui.setState({ pick: null });
+    pending.resolve(value);
   }
 
   openPalette(): void {
@@ -629,7 +682,22 @@ export class Workbench {
       defaultPath,
     });
     if (path === null) return { ok: false, reason: "cancelled" };
-    return this.writeTo(doc, path, text, false);
+    const result = await this.writeTo(doc, path, text, false);
+    if (result.ok) this.followSavedExtension(doc.id, path);
+    return result;
+  }
+
+  /**
+   * After a Save As, treats the document as the format that claims the new extension. An
+   * extension nobody claims (`.xyz`) keeps the current format: the plain-text fallback is for
+   * opening files, not for deciding that a saved file changed kind.
+   */
+  private followSavedExtension(id: string, path: string): void {
+    const doc = this.docById(id);
+    const claimed = this.registry.forPath(path);
+    if (!doc || !claimed || claimed.id === doc.providerId) return;
+    this.documents.getState().setProvider(id, claimed.id);
+    this.notify({ message: `Now treating this file as ${claimed.name}` });
   }
 
   /** Closes a document, asking first if it has unsaved changes. Returns false if cancelled. */
@@ -845,7 +913,14 @@ export class Workbench {
     const current = new Map(documents.map((d) => [d.id, d]));
     const opened = documents.filter((d) => !this.knownDocuments.has(d.id));
     const closed = [...this.knownDocuments.values()].filter((d) => !current.has(d.id));
+    const switched = documents.filter((d) => {
+      const before = this.knownDocuments.get(d.id);
+      return before !== undefined && before.providerId !== d.providerId;
+    });
     this.knownDocuments = current;
+    // A new format changes the provider's extensions and anything that reads the format (such
+    // as spellcheck), so rebuild them for that document, keeping its text, cursor and history.
+    for (const doc of switched) this.reconfigureDocument(doc);
     for (const doc of closed) this.autosaveHolds.delete(doc.id);
     for (const doc of opened) this.openedEmitter.emit(doc);
     for (const doc of closed) this.closedEmitter.emit(doc);
@@ -914,6 +989,20 @@ export class Workbench {
       openLink: (href) => followDocumentLink(this, href, this.docById(doc.id)?.path ?? null),
       resolveAsset: (rel) => documentAssetUrl(this, rel, this.docById(doc.id)?.path ?? null),
     });
+  }
+
+  /** Rebuilds every compartment of one document (provider and features), keeping its state. */
+  private reconfigureDocument(doc: OpenDocument): void {
+    const effects = ["provider", ...this.features.map((f) => f.id)]
+      .map((id) => this.reconfigureEffect(id, doc))
+      .filter((e): e is StateEffect<unknown> => e !== null);
+    if (effects.length === 0) return;
+    if (this.view && this.shownId === doc.id) {
+      this.view.dispatch({ effects });
+      return;
+    }
+    const state = this.buffers.get(doc.id);
+    if (state) this.buffers.set(doc.id, state.update({ effects }).state);
   }
 
   private reconfigureEffect(featureId: string, doc: OpenDocument): StateEffect<unknown> | null {

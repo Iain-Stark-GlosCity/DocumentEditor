@@ -6,6 +6,7 @@ import type { FormatRegistry } from "../core/registry";
 import type { SettingsStore } from "../core/settings";
 import type { Platform } from "../platform/platform";
 import { CommandPalette } from "./CommandPalette";
+import { QuickPickHost } from "./QuickPick";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditorPane } from "./EditorPane";
 import { EmptyState } from "./EmptyState";
@@ -86,6 +87,7 @@ export function App(props: AppProps) {
       </main>
       {!zen && <StatusBar workbench={workbench} />}
       <CommandPalette workbench={workbench} />
+      <QuickPickHost workbench={workbench} />
       {workbench.features.flatMap((feature) =>
         (feature.overlays ?? []).map((Overlay, i) => (
           <Overlay key={`${feature.id}:${i}`} workbench={workbench} />

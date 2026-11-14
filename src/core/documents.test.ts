@@ -82,4 +82,23 @@ describe("documents store", () => {
     store.getState().setActive("nope");
     expect(store.getState().activeId).toBe(b);
   });
+
+  it("changes a document's provider without touching anything else", () => {
+    const store = createDocumentsStore();
+    const id = store.getState().openFromFile("C:\\a\\note.md", data("hello"), "markdown");
+    const before = store.getState().documents[0];
+    store.getState().setProvider(id, "text");
+    const after = store.getState().documents[0];
+    expect(after?.providerId).toBe("text");
+    expect({ ...after, providerId: "markdown" }).toEqual(before);
+  });
+
+  it("ignores an unknown document and an unchanged provider", () => {
+    const store = createDocumentsStore();
+    const id = store.getState().openUntitled("markdown");
+    const documents = store.getState().documents;
+    store.getState().setProvider("nope", "text");
+    store.getState().setProvider(id, "markdown");
+    expect(store.getState().documents).toBe(documents);
+  });
 });

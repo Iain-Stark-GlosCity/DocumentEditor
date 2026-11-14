@@ -244,6 +244,9 @@ async function restoreOne(
   written: Set<string>,
 ): Promise<string | null> {
   const store = wb.documents.getState();
+  // Known limitation: the recovery record has no format field (and the Rust side that stores it
+  // is out of scope), so an untitled snapshot always restores as the default format, even if the
+  // user had switched it with "Change format". Saved files are re-resolved from their path.
   const provider = snapshot.path
     ? wb.registry.resolve(snapshot.path)
     : wb.registry.defaultProvider();

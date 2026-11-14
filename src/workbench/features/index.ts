@@ -8,6 +8,7 @@ import { editCommands } from "./edit-commands";
 import { editorAppearance } from "./editor-appearance";
 import { externalChanges } from "./external-changes";
 import { find } from "./find";
+import { formatSwitcher } from "./format-switcher";
 import { focusMode } from "./focus-mode";
 import { fileCommands } from "./file-commands";
 import { outline } from "./outline";
@@ -39,6 +40,7 @@ export const defaultFeatures: readonly Feature[] = [
   help,
   statusCursor,
   statusFormat,
+  formatSwitcher,
   windowTitle,
   externalChanges,
   autosave,
