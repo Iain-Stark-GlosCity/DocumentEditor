@@ -7,14 +7,25 @@ export function extensionOf(path: string): string {
   return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
+export interface RegisterOptions {
+  /** The format a new, unsaved document starts as. At most one provider claims this. */
+  default?: boolean;
+  /** The format for a file whose extension no provider claims. At most one provider claims this. */
+  fallback?: boolean;
+}
+
 export class FormatRegistry {
   private readonly providers = new Map<string, FormatProvider>();
+  private defaultId: string | undefined;
+  private fallbackId: string | undefined;
 
-  register(provider: FormatProvider): void {
+  register(provider: FormatProvider, options: RegisterOptions = {}): void {
     if (this.providers.has(provider.id)) {
       throw new Error(`A format with id "${provider.id}" is already registered`);
     }
     this.providers.set(provider.id, provider);
+    if (options.default) this.defaultId = provider.id;
+    if (options.fallback) this.fallbackId = provider.id;
   }
 
   byId(id: string): FormatProvider | undefined {
@@ -26,6 +37,23 @@ export class FormatRegistry {
     const ext = extensionOf(path);
     if (ext === "") return undefined;
     return this.all().find((p) => p.fileExtensions.some((e) => e.toLowerCase() === ext));
+  }
+
+  /** The format for a new, unsaved document: the one registered as default, else the first. */
+  defaultProvider(): FormatProvider | undefined {
+    return (this.defaultId ? this.providers.get(this.defaultId) : undefined) ?? this.all()[0];
+  }
+
+  /** The format for a file nobody claims: the registered fallback, else the default. */
+  fallbackProvider(): FormatProvider | undefined {
+    return (
+      (this.fallbackId ? this.providers.get(this.fallbackId) : undefined) ?? this.defaultProvider()
+    );
+  }
+
+  /** The format to open a path as: the one that claims its extension, else the fallback. */
+  resolve(path: string): FormatProvider | undefined {
+    return this.forPath(path) ?? this.fallbackProvider();
   }
 
   all(): readonly FormatProvider[] {

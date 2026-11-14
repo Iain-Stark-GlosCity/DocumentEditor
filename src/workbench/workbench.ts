@@ -267,7 +267,7 @@ export class Workbench {
       // Files passed on the command line are opened before deciding whether to show a blank tab.
       await Promise.allSettled([...this.opens]);
       if (!current()) return;
-      const provider = this.registry.all()[0];
+      const provider = this.registry.defaultProvider();
       if (provider && this.documents.getState().documents.length === 0) {
         this.documents.getState().openUntitled(provider.id);
       }
@@ -553,16 +553,28 @@ export class Workbench {
   // File operations -----------------------------------------------------------------------
 
   newFile(): string | null {
-    const provider = this.registry.all()[0];
+    const provider = this.registry.defaultProvider();
     if (!provider) return null;
     return this.documents.getState().openUntitled(provider.id);
   }
 
-  fileFilters(): FileFilter[] {
-    const known = this.registry
-      .all()
-      .map((p) => ({ name: p.name, extensions: [...p.fileExtensions] }));
-    return [...known, { name: "All files", extensions: ["*"] }];
+  /**
+   * The filters for the Open and Save dialogs. Open starts with "All supported files" so every
+   * format shows at once; Save lists the document's own format first, so its extension is the
+   * default one.
+   */
+  fileFilters(first?: string): FileFilter[] {
+    const providers = [...this.registry.all()];
+    const index = first ? providers.findIndex((p) => p.id === first) : -1;
+    if (index > 0) providers.unshift(...providers.splice(index, 1));
+    const known = providers.map((p) => ({ name: p.name, extensions: [...p.fileExtensions] }));
+    const all = { name: "All files", extensions: ["*"] };
+    if (first) return [...known, all];
+    const supported = {
+      name: "All supported files",
+      extensions: providers.flatMap((p) => p.fileExtensions),
+    };
+    return providers.length > 1 ? [supported, ...known, all] : [...known, all];
   }
 
   async openDialog(): Promise<void> {
@@ -612,7 +624,10 @@ export class Workbench {
       return { ok: false, reason: "error", error: "No such document" };
     const ext = this.registry.byId(doc.providerId)?.fileExtensions[0];
     const defaultPath = doc.path ?? (ext ? `${doc.title}.${ext}` : doc.title);
-    const path = await this.platform.showSaveDialog({ filters: this.fileFilters(), defaultPath });
+    const path = await this.platform.showSaveDialog({
+      filters: this.fileFilters(doc.providerId),
+      defaultPath,
+    });
     if (path === null) return { ok: false, reason: "cancelled" };
     return this.writeTo(doc, path, text, false);
   }
@@ -688,7 +703,7 @@ export class Workbench {
   private async openPathsNow(paths: string[]): Promise<void> {
     for (const path of paths) {
       try {
-        const provider = this.registry.forPath(path) ?? this.registry.all()[0];
+        const provider = this.registry.resolve(path);
         if (!provider) throw new Error("No document formats are registered");
         const data = await this.platform.readFile(path);
         // An untouched "Untitled" tab is replaced rather than left beside the new file.

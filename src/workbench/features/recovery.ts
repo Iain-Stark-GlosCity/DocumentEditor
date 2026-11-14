@@ -244,8 +244,9 @@ async function restoreOne(
   written: Set<string>,
 ): Promise<string | null> {
   const store = wb.documents.getState();
-  const provider =
-    (snapshot.path ? wb.registry.forPath(snapshot.path) : undefined) ?? wb.registry.all()[0];
+  const provider = snapshot.path
+    ? wb.registry.resolve(snapshot.path)
+    : wb.registry.defaultProvider();
   if (!provider) return null;
 
   let id: string;
