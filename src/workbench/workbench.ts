@@ -760,7 +760,8 @@ export class Workbench {
               id: command.id,
               title: command.title,
               defaultKey: command.defaultKey,
-              enabled: active,
+              enabled: () =>
+                active() && (!command.enabled || !this.view || command.enabled(this.view.state)),
               run: () => {
                 if (this.view) command.run(this.view);
               },
@@ -808,6 +809,8 @@ export class Workbench {
     for (const command of this.commands.all()) {
       if (command.nativeKey) continue;
       if (!commandKeys(command).some((key) => matchesKey(event, key))) continue;
+      // A disabled command does not claim its key: it falls through to the editor or browser.
+      if (command.enabled && !command.enabled()) continue;
       // Capture phase plus stopPropagation: CodeMirror and React never see the same key again.
       event.preventDefault();
       event.stopPropagation();

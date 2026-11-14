@@ -290,6 +290,16 @@ describe("commands", () => {
   };
   const T = lines("| a | b |", "|---|---|", "| 1 | 2 |", "| 3 | 4 |");
 
+  it("are enabled only inside a table, except insert and paste", () => {
+    const inside = makeView("| a |\n|---|\n| ^1 |\n").state;
+    const outside = makeView("plain ^text\n").state;
+    for (const c of tableCommands) {
+      const always = c.id === "markdown.table.insert" || c.id === "markdown.table.pasteAsTable";
+      expect(c.enabled?.(inside) ?? true, c.id).toBe(true);
+      expect(c.enabled?.(outside) ?? true, c.id).toBe(always);
+    }
+  });
+
   it("registers the documented ids", () => {
     expect(tableCommands.map((c) => c.id)).toEqual(
       [

@@ -10,7 +10,7 @@ import {
   selectNextOccurrence,
   selectSelectionMatches,
 } from "@codemirror/search";
-import type { EditorView } from "@codemirror/view";
+import { keymap, type EditorView } from "@codemirror/view";
 import type { Command } from "../../core/commands";
 import type { Feature } from "../feature";
 import type { Workbench } from "../workbench";
@@ -23,6 +23,10 @@ export const find: Feature = {
   id: "find",
   editorExtensions: () => [
     search({ top: true }),
+    // The panel's own Escape binding lives in `searchKeymap`, which is not used (the workbench
+    // dispatches the other keys). Escape closes the panel and returns focus to the editor, from
+    // the panel's fields and from the editor alike; it falls through when no panel is open.
+    keymap.of([{ key: "Escape", run: closeSearchPanel, scope: "editor search-panel" }]),
     highlightSelectionMatches(),
     // Select next and select all occurrences add ranges, which CodeMirror drops unless this is on.
     EditorState.allowMultipleSelections.of(true),

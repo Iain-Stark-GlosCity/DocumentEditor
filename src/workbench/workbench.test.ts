@@ -179,6 +179,64 @@ describe("Workbench controller", () => {
     workbench.dispose();
   });
 
+  it("lets a key fall through when its command is disabled, or to the next enabled command", () => {
+    let on = false;
+    const first = vi.fn();
+    const second = vi.fn();
+    const feature: Feature = {
+      id: "keys",
+      commands: () => [
+        { id: "keys.a", title: "A", defaultKey: "Mod-Alt-j", enabled: () => on, run: first },
+        { id: "keys.b", title: "B", defaultKey: "Mod-Alt-j", run: second },
+      ],
+    };
+    const { workbench } = makeWorkbench({ features: [feature] });
+    workbench.start();
+    const press = () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "j",
+        ctrlKey: true,
+        altKey: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(press()).toBe(true);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+    on = true;
+    press();
+    expect(first).toHaveBeenCalledTimes(1);
+    workbench.dispose();
+  });
+
+  it("does not swallow the key of a disabled command", () => {
+    const feature: Feature = {
+      id: "keys",
+      commands: () => [
+        {
+          id: "keys.off",
+          title: "Off",
+          defaultKey: "Mod-Alt-k",
+          enabled: () => false,
+          run: vi.fn(),
+        },
+      ],
+    };
+    const { workbench } = makeWorkbench({ features: [feature] });
+    workbench.start();
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      ctrlKey: true,
+      altKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    workbench.dispose();
+  });
+
   it("rebuilds a feature's editor extensions when a listed setting changes", async () => {
     const { workbench } = makeWorkbench();
     workbench.start();

@@ -1,8 +1,7 @@
 /**
  * F6 and Shift+F6 move keyboard focus around the editor and every visible side pane, in the
- * order they appear on screen. This feature must be listed before `preview` in
- * `features/index.ts`: the first enabled command for a key wins, so it takes over F6 from the
- * preview's own editor-and-preview command.
+ * order they appear on screen. These are the only F6 commands: a pane feature does not add its
+ * own, it just marks the element to focus with `data-pane-focus`.
  */
 import type { Feature } from "../feature";
 import type { Workbench } from "../workbench";
@@ -57,5 +56,9 @@ export const paneFocus: Feature = {
       enabled: () => regions().length > 1,
       run: () => cycle(wb, -1),
     },
+  ],
+  menuItems: [
+    { menu: "view", group: "4_preview", command: "view.focusNextPane", order: 2 },
+    { menu: "view", group: "4_preview", command: "view.focusPreviousPane", order: 3 },
   ],
 };

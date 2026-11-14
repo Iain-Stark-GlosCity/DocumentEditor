@@ -2,7 +2,6 @@
  * Block-level commands: headings, blockquote, lists, task state, code block, horizontal rule.
  * All of them work line by line on the lines the selection touches.
  */
-import { insertBlankLine } from "@codemirror/commands";
 import { EditorSelection, type ChangeSpec, type EditorState } from "@codemirror/state";
 import {
   commit,
@@ -216,9 +215,16 @@ export const toggleTaskChecked: EditCommand = (target) => {
   return commit(target, { changes });
 };
 
-/** Mod-Enter: toggle a task, or insert a blank line below if the cursor is not on one. */
-export const toggleTaskOrBlankLine: EditCommand = (target) =>
-  toggleTaskChecked(target) || insertBlankLine(target);
+/** Is any line under the selection a task item? Decides whether Mod-Enter belongs to us. */
+export function selectionHasTask(state: EditorState): boolean {
+  for (const range of state.selection.ranges) {
+    for (let n = state.doc.lineAt(range.from).number; n <= state.doc.lineAt(range.to).number; n++) {
+      const p = parseLine(state.doc.line(n).text);
+      if (p.kind === "task" || (p.kind === "ordered" && p.boxStart >= 0)) return true;
+    }
+  }
+  return false;
+}
 
 function longestRun(text: string, char: string): number {
   let longest = 0;
