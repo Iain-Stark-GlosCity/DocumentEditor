@@ -14,20 +14,7 @@ import { keymap, type EditorView } from "@codemirror/view";
 import type { Command } from "../../core/commands";
 import type { Feature } from "../feature";
 import type { Workbench } from "../workbench";
-
-/** The panel's labels in sentence-case British English (CodeMirror's own are lowercase). */
-const PHRASES: Record<string, string> = {
-  next: "Next",
-  previous: "Previous",
-  all: "Select all",
-  "match case": "Match case",
-  regexp: "Regular expression",
-  "by word": "Whole word",
-  replace: "Replace",
-  "replace all": "Replace all",
-  close: "Close",
-  go: "Go",
-};
+import { createFindPanel, setReplaceVisible } from "./find-panel";
 
 /**
  * Find, replace, go to line and multiple selections. The search itself is `@codemirror/search`;
@@ -36,12 +23,11 @@ const PHRASES: Record<string, string> = {
 export const find: Feature = {
   id: "find",
   editorExtensions: () => [
-    search({ top: true }),
+    search({ top: true, createPanel: createFindPanel }),
     // The panel's own Escape binding lives in `searchKeymap`, which is not used (the workbench
     // dispatches the other keys). Escape closes the panel and returns focus to the editor, from
     // the panel's fields and from the editor alike; it falls through when no panel is open.
     keymap.of([{ key: "Escape", run: closeSearchPanel, scope: "editor search-panel" }]),
-    EditorState.phrases.of(PHRASES),
     highlightSelectionMatches(),
     // Select next and select all occurrences add ranges, which CodeMirror drops unless this is on.
     EditorState.allowMultipleSelections.of(true),
@@ -54,7 +40,8 @@ export const find: Feature = {
       () => {
         const view = wb.activeView();
         if (!view || !wb.activeDocument()) return;
-        view.focus();
+        // Keep focus in the find widget when a find command is used from there (F3).
+        if (!document.activeElement?.closest(".cm-find")) view.focus();
         fn(view);
       };
 
@@ -73,7 +60,15 @@ export const find: Feature = {
 
     return [
       command("edit.find", "Find", (v) => void openSearchPanel(v), "Mod-f"),
-      command("edit.replace", "Replace", (v) => void openSearchPanel(v), "Mod-h"),
+      command(
+        "edit.replace",
+        "Replace",
+        (v) => {
+          openSearchPanel(v);
+          v.dispatch({ effects: setReplaceVisible.of(true) });
+        },
+        "Mod-h",
+      ),
       command("edit.findNext", "Find next", (v) => void findNext(v), "F3"),
       command("edit.findPrevious", "Find previous", (v) => void findPrevious(v), "Shift-F3"),
       command(

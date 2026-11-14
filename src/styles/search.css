@@ -1,134 +1,180 @@
 /*
- * The CodeMirror search panel (find, replace, go to line) and match highlights, in the theme
- * tokens from theme.css. CodeMirror's base theme uses `&light` and `&dark` selectors, which are
- * more specific than these, so the highlight and panel colours carry !important.
+ * The floating find widget (src/workbench/features/find-panel.ts) and match highlights, in the
+ * theme tokens from theme.css. CodeMirror's base theme uses `&light` and `&dark` selectors, which
+ * are more specific than these, so the highlight colours carry !important.
+ *
+ * CodeMirror docks panels in `.cm-panels-top`, a sticky, full-width box above the text. It is kept
+ * at zero height and the widget is positioned absolutely inside it, so opening find never shifts
+ * the document. `--find-scrollbar` (set from script) keeps the widget clear of the scrollbar.
  */
 
 .cm-editor .cm-panels {
-  background: var(--bg-chrome) !important;
-  color: var(--fg) !important;
-  border-color: var(--border) !important;
+  background: transparent !important;
+  border: 0 !important;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.cm-editor .cm-panels-top {
-  border-bottom: 1px solid var(--border) !important;
-}
-
-.cm-editor .cm-panel.cm-search {
-  position: relative;
-  /* A grid, so the find and replace rows line up column by column. CodeMirror's <br> between
-     the rows takes no part in the layout. */
+.cm-find {
+  --find-field-h: 26px;
+  position: absolute;
+  top: 8px;
+  right: calc(12px + var(--find-scrollbar, 0px));
+  z-index: 5;
+  box-sizing: border-box;
+  width: min(420px, calc(100% - 24px - var(--find-scrollbar, 0px)));
   display: grid;
-  grid-template-columns: minmax(8em, 1fr) repeat(6, auto);
+  grid-template-columns: 24px minmax(0, 1fr) 24px 24px 24px;
   align-items: center;
-  gap: 6px;
-  background: var(--bg-chrome);
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-elevated);
   color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   font-family: var(--font-ui);
   font-size: 13px;
-  padding: 8px 44px 8px 12px;
-  overflow-x: auto;
+  pointer-events: auto;
+  animation: cm-find-in 120ms ease-out;
 }
 
-.cm-editor .cm-panel.cm-search br {
+.cm-find [hidden] {
   display: none;
 }
 
-.cm-panel.cm-search input[type="text"],
-.cm-panel.cm-search input:not([type]) {
-  box-sizing: border-box;
-  height: 28px;
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 0 8px;
-  font: inherit;
+@keyframes cm-find-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
-.cm-panel.cm-search input[type="text"]::placeholder {
+.cm-find-btn {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
   color: var(--fg-muted);
-}
-
-.cm-panel.cm-search button {
-  box-sizing: border-box;
-  height: 28px;
-  margin: 0;
-  background: var(--bg-elevated);
-  color: var(--fg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 0 12px;
   font: inherit;
   cursor: pointer;
 }
 
-.cm-panel.cm-search button:hover {
+.cm-find-btn:hover {
   background: var(--bg-hover);
+  color: var(--fg);
 }
 
-.cm-panel.cm-search button:active {
+.cm-find-btn:active {
   background: var(--bg-pressed);
 }
 
-/* The close button sits in the top-right corner. */
-.cm-panel.cm-search button[name="close"] {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  padding: 0;
+.cm-find-chevron svg {
+  transition: transform 120ms ease-out;
+}
+
+.cm-find-chevron[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.cm-find-field {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: var(--find-field-h);
+  padding-right: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.cm-find-field:focus-within {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.cm-find-field.is-error {
+  border-color: var(--danger-fg);
+}
+
+.cm-find-field.is-error:focus-within {
+  outline-color: var(--danger-fg);
+}
+
+.cm-find-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 6px;
   background: transparent;
-  border-color: transparent;
+  color: var(--fg);
+  border: 0;
+  outline: 0;
+  font: inherit;
+}
+
+.cm-find-input::placeholder {
   color: var(--fg-muted);
-  font-size: 20px;
+}
+
+.cm-find-count {
+  flex: none;
+  padding: 0 4px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cm-find-field.is-error .cm-find-count {
+  color: var(--danger-fg);
+  font-weight: 600;
+}
+
+.cm-find-toggle {
+  flex: none;
+  width: 22px;
+  height: 20px;
+}
+
+.cm-find-glyph {
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
 }
 
-.cm-panel.cm-search button[name="close"]:hover {
-  color: var(--fg);
-  background: var(--bg-hover);
+.cm-find-toggle-word .cm-find-glyph {
+  padding: 1px 2px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
 }
 
-.cm-editor .cm-panel.cm-search label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  color: var(--fg);
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
+.cm-find-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
-.cm-panel.cm-search label:hover {
-  background: var(--bg-hover);
+.cm-find-toggle[aria-pressed="true"]:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
-.cm-panel.cm-search input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-  margin: 0;
-}
-
-/* Visible focus for every control in the panel, in both themes. */
-.cm-panel.cm-search input:focus-visible,
-.cm-panel.cm-search button:focus-visible {
+.cm-find-btn:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
-.cm-panel.cm-search label:has(input:focus-visible) {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
-
+/* Match highlights: every match is tinted and outlined, the current one is solid. */
 .cm-editor .cm-searchMatch {
   background-color: color-mix(in srgb, var(--accent) 25%, transparent) !important;
   outline: 1px solid var(--accent);
@@ -149,8 +195,61 @@
   background-color: transparent !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .cm-find,
+  .cm-find-chevron svg {
+    animation: none;
+    transition: none;
+  }
+}
+
 @media (prefers-contrast: more) {
   .cm-editor .cm-searchMatch {
     outline-width: 2px;
+  }
+}
+
+/* High contrast: system colours, and a pressed state that does not rely on tint alone. */
+@media (forced-colors: active) {
+  .cm-find {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .cm-find-field {
+    background: Field;
+    border-color: FieldText;
+  }
+
+  .cm-find-field.is-error {
+    border-width: 2px;
+  }
+
+  .cm-find-btn,
+  .cm-find-count {
+    color: ButtonText;
+  }
+
+  .cm-find-btn:hover,
+  .cm-find-btn:focus-visible {
+    outline: 2px solid Highlight;
+  }
+
+  .cm-find-toggle[aria-pressed="true"],
+  .cm-find-toggle[aria-pressed="true"]:hover {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+    border-color: HighlightText;
+  }
+
+  .cm-editor .cm-searchMatch {
+    outline: 1px solid Highlight;
+  }
+
+  .cm-editor .cm-searchMatch.cm-searchMatch-selected {
+    outline: 2px solid CanvasText;
   }
 }

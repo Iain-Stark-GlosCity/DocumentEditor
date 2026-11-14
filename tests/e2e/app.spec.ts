@@ -51,27 +51,61 @@ test("split preview renders headings, tables, code, maths and diagrams in the wo
   await expect.poll(() => app.evaluate(() => navigator.clipboard.readText())).toContain("answer");
 });
 
-test("Escape closes the find panel and returns focus to the editor", async ({ app }) => {
-  await editor(app).click();
-  await app.keyboard.press("Control+f");
-  const panel = app.locator(".cm-search");
-  await expect(panel).toBeVisible();
-  await expect(panel.locator("input[name=search]")).toBeFocused();
+test("find widget floats over the editor without moving the text, and Escape closes it", async ({
+  app,
+}) => {
+  await setDocument(app, "alpha beta\n".repeat(40));
+  await app.keyboard.press("Control+Home");
+  const firstLine = app.locator(".cm-line").first();
+  await expect(firstLine).toBeVisible();
+  const before = await firstLine.boundingBox();
 
-  await app.keyboard.type("the");
+  await app.keyboard.press("Control+f");
+  const widget = app.locator(".cm-find");
+  await expect(widget).toBeVisible();
+  await expect(widget.locator("input[name=search]")).toBeFocused();
+  const after = await firstLine.boundingBox();
+  expect(after?.y).toBe(before?.y);
+
+  // In the top-right corner of the editor, clear of the scrollbar.
+  const box = (await widget.boundingBox())!;
+  const scroller = (await app.locator(".cm-scroller").boundingBox())!;
+  expect(box.width).toBeLessThanOrEqual(420);
+  expect(box.y).toBeLessThan(scroller.y + 16);
+  expect(box.x + box.width).toBeLessThanOrEqual(scroller.x + scroller.width - 8);
+  expect(box.x + box.width).toBeGreaterThan(scroller.x + scroller.width - 60);
+
+  await app.keyboard.type("beta");
+  await expect(widget.locator(".cm-find-count")).toHaveText("1 of 40");
   await app.keyboard.press("Enter");
+  await expect(widget.locator(".cm-find-count")).toHaveText("2 of 40");
   await app.keyboard.press("Shift+Enter");
   await app.keyboard.press("F3");
+  await expect(widget.locator(".cm-find-count")).toHaveText("2 of 40");
+  await app.keyboard.type("zzz");
+  await expect(widget.locator(".cm-find-count")).toHaveText("No results");
+
   await app.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
+  await expect(widget).toHaveCount(0);
   await expect(editor(app)).toBeFocused();
 
-  // Escape from the editor with the panel open closes it too.
+  // Escape from the editor with the widget open closes it too.
   await app.keyboard.press("Control+f");
-  await expect(panel).toBeVisible();
+  await expect(widget).toBeVisible();
   await editor(app).click();
   await app.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
+  await expect(widget).toHaveCount(0);
+});
+
+test("Ctrl+H shows the replace row and replace all edits the document", async ({ app }) => {
+  await setDocument(app, "one two one two one");
+  await app.keyboard.press("Control+h");
+  const widget = app.locator(".cm-find");
+  await expect(widget.locator("input[name=replace]")).toBeVisible();
+  await app.keyboard.type("one");
+  await widget.locator("input[name=replace]").fill("1");
+  await widget.locator("input[name=replace]").press("Control+Alt+Enter");
+  await expect.poll(() => documentText(app)).toBe("1 two 1 two 1");
 });
 
 test("live mode hides markers away from the cursor and shows them at the cursor", async ({
