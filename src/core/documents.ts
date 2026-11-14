@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FileData, FileFormat } from "../platform/platform";
 import { DEFAULT_FILE_FORMAT } from "../platform/platform";
+import { containerTitle } from "./container-path";
 
 export interface OpenDocument {
   id: string;
@@ -93,7 +94,7 @@ export function createDocumentsStore(): DocumentsStore {
         format: data.format,
         savedText: data.text,
         modifiedMs: data.modifiedMs,
-        title: baseName(path),
+        title: containerTitle(path),
       };
       set((s) => ({ documents: [...s.documents, doc], activeId: id }));
       return id;
@@ -108,7 +109,7 @@ export function createDocumentsStore(): DocumentsStore {
                 path,
                 savedText: text,
                 modifiedMs,
-                title: baseName(path),
+                title: containerTitle(path),
                 format: format ?? d.format,
                 missingOnDisk: false,
               }

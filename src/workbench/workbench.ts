@@ -469,8 +469,15 @@ export class Workbench {
     this.documents.getState().applyDisk(id, data);
   }
 
+  /** Whether the document's format is view-only (`provider.readOnly`). */
+  isReadOnly(doc: OpenDocument | null | undefined): boolean {
+    return doc ? this.registry.byId(doc.providerId)?.readOnly === true : false;
+  }
+
   isDirty(id: string): boolean {
     const doc = this.documents.getState().documents.find((d) => d.id === id);
+    // A generated, view-only document has nothing to lose: it is never unsaved.
+    if (doc && this.isReadOnly(doc)) return false;
     if (doc?.missingOnDisk) return true;
     const state = this.buffers.get(id);
     if (!doc || !state) return false;
@@ -664,6 +671,7 @@ export class Workbench {
     const text = doc && this.getText(doc.id);
     if (!doc || text === undefined)
       return { ok: false, reason: "error", error: "No such document" };
+    if (this.isReadOnly(doc)) return { ok: false, reason: "blocked" };
     if (doc.path === null) {
       return options.auto ? { ok: false, reason: "blocked" } : this.saveAsNow(doc.id);
     }
@@ -675,13 +683,28 @@ export class Workbench {
     const text = doc && this.getText(doc.id);
     if (!doc || text === undefined)
       return { ok: false, reason: "error", error: "No such document" };
-    const ext = this.registry.byId(doc.providerId)?.fileExtensions[0];
-    const defaultPath = doc.path ?? (ext ? `${doc.title}.${ext}` : doc.title);
+    const readOnly = this.isReadOnly(doc);
+    // A view-only document is a generated view of another file, so Save as writes a text copy:
+    // it starts from the default text format, never from the original (binary) file's name.
+    const copyAs = readOnly ? this.registry.defaultProvider() : undefined;
+    const ext = (copyAs ?? this.registry.byId(doc.providerId))?.fileExtensions[0];
+    const stem = doc.title.replace(/\.[^.\s]*$/, "");
+    const defaultPath = readOnly
+      ? ext
+        ? `${stem}.${ext}`
+        : stem
+      : (doc.path ?? (ext ? `${doc.title}.${ext}` : doc.title));
     const path = await this.platform.showSaveDialog({
-      filters: this.fileFilters(doc.providerId),
+      filters: this.fileFilters(copyAs?.id ?? doc.providerId),
       defaultPath,
     });
     if (path === null) return { ok: false, reason: "cancelled" };
+    if (readOnly && this.registry.forPath(path)?.readOnly === true) {
+      // Writing the view's text over, say, a .docx would destroy a real file.
+      const error = "That name is for a view-only format. Choose a text file name instead.";
+      this.notify({ kind: "error", message: `Could not save a copy: ${error}` });
+      return { ok: false, reason: "error", error };
+    }
     const result = await this.writeTo(doc, path, text, false);
     if (result.ok) this.followSavedExtension(doc.id, path);
     return result;
@@ -694,7 +717,11 @@ export class Workbench {
    */
   private followSavedExtension(id: string, path: string): void {
     const doc = this.docById(id);
-    const claimed = this.registry.forPath(path);
+    // A view-only document cannot stay view-only once it is a text file of its own, so it falls
+    // back to whatever opens that name.
+    const claimed =
+      this.registry.forPath(path) ??
+      (this.isReadOnly(doc) ? this.registry.resolve(path) : undefined);
     if (!doc || !claimed || claimed.id === doc.providerId) return;
     this.documents.getState().setProvider(id, claimed.id);
     this.notify({ message: `Now treating this file as ${claimed.name}` });
@@ -836,7 +863,9 @@ export class Workbench {
   private registerProviderCommands(stops: Unsubscribe[]): void {
     for (const provider of this.registry.all()) {
       for (const command of provider.commands ?? []) {
-        const active = () => this.activeDocument()?.providerId === provider.id && !!this.view;
+        // A format's commands edit the text, so none run on a view-only format.
+        const active = () =>
+          this.activeDocument()?.providerId === provider.id && !!this.view && !provider.readOnly;
         try {
           stops.push(
             this.commands.register({
@@ -893,7 +922,12 @@ export class Workbench {
       if (command.nativeKey) continue;
       if (!commandKeys(command).some((key) => matchesKey(event, key))) continue;
       // A disabled command does not claim its key: it falls through to the editor or browser.
-      if (command.enabled && !command.enabled()) continue;
+      if (command.enabled && !command.enabled()) {
+        if (command.onDisabledKey?.() !== true) continue;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       // Capture phase plus stopPropagation: CodeMirror and React never see the same key again.
       event.preventDefault();
       event.stopPropagation();
@@ -981,7 +1015,7 @@ export class Workbench {
     if (!provider) return [];
     const requested = this.settings.get("editor.viewMode");
     const mode = provider.viewModes.includes(requested) ? requested : "source";
-    return provider.editorExtensions({
+    const extensions = provider.editorExtensions({
       mode,
       path: doc.path,
       setting: (key, fallback) => this.settings.getOr(key, fallback),
@@ -989,6 +1023,14 @@ export class Workbench {
       openLink: (href) => followDocumentLink(this, href, this.docById(doc.id)?.path ?? null),
       resolveAsset: (rel) => documentAssetUrl(this, rel, this.docById(doc.id)?.path ?? null),
     });
+    if (!provider.readOnly) return extensions;
+    // `readOnly`, not `editable: false`: the caret, selection, find, copy and keyboard
+    // navigation keep working; only edits are refused. It comes first so it wins the facet.
+    return [
+      EditorState.readOnly.of(true),
+      EditorView.contentAttributes.of({ "aria-readonly": "true" }),
+      extensions,
+    ];
   }
 
   /** Rebuilds every compartment of one document (provider and features), keeping its state. */

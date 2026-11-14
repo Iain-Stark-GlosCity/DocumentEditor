@@ -8,11 +8,20 @@ export interface TabStripProps {
   documents: readonly OpenDocument[];
   activeId: string | null;
   dirty: Readonly<Record<string, boolean>>;
+  /** Ids of documents whose format is view-only. */
+  readOnly?: ReadonlySet<string>;
   onSelect(id: string): void;
   onClose(id: string): void;
 }
 
-export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabStripProps) {
+export function TabStrip({
+  documents,
+  activeId,
+  dirty,
+  readOnly,
+  onSelect,
+  onClose,
+}: TabStripProps) {
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const index = documents.findIndex((d) => d.id === activeId);
     if (index < 0) return;
@@ -47,6 +56,7 @@ export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabS
       {documents.map((doc) => {
         const selected = doc.id === activeId;
         const isDirty = dirty[doc.id] === true;
+        const locked = readOnly?.has(doc.id) === true;
         return (
           <div key={doc.id} className="tab-wrap" role="presentation" data-selected={selected}>
             <button
@@ -57,7 +67,7 @@ export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabS
               aria-selected={selected}
               aria-controls={PANEL_ID}
               tabIndex={selected ? 0 : -1}
-              title={doc.path ?? doc.title}
+              title={`${doc.path ?? doc.title}${locked ? " (read-only)" : ""}`}
               onClick={() => onSelect(doc.id)}
               // Middle-click closes the tab. Stop the browser's autoscroll on mouse down.
               onMouseDown={(e) => {
@@ -70,6 +80,14 @@ export function TabStrip({ documents, activeId, dirty, onSelect, onClose }: TabS
               }}
             >
               <span className="tab-title">{doc.title}</span>
+              {locked && (
+                <>
+                  <span className="tab-lock" aria-hidden="true">
+                    🔒
+                  </span>
+                  <span className="sr-only"> (read-only)</span>
+                </>
+              )}
               {isDirty && (
                 <>
                   <span className="dirty-dot" aria-hidden="true">

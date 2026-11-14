@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { isContainerPartPath } from "../../core/container-path";
 import type { SettingValue } from "../../core/settings";
 import type { Feature, FeatureComponentProps } from "../feature";
 import { useSetting } from "../hooks";
@@ -15,12 +16,19 @@ export interface AutoSaveCandidate {
   /** Something (an unresolved conflict, a missing file) asked us to leave the document alone. */
   held: boolean;
   saving: boolean;
+  /** A view-only document is never saved automatically (it is never dirty either). */
+  readOnly?: boolean;
 }
 
 /** Whether an automatic save should be attempted now. */
 export function shouldAutosave(c: AutoSaveCandidate): boolean {
   if (c.mode === "off") return false;
   if (c.trigger === "delay" ? c.mode !== "afterDelay" : c.mode !== "onFocusChange") return false;
+  if (c.readOnly) return false;
+  // A part of a container (`report.docx!/word/document.xml`) is skipped: saving it rewrites the
+  // whole archive, which must not happen on a timer while someone is halfway through typing an
+  // XML tag. Manual Save still works.
+  if (c.path !== null && isContainerPartPath(c.path)) return false;
   return c.path !== null && c.dirty && !c.held && !c.saving;
 }
 
@@ -66,6 +74,7 @@ export const autosave: Feature = {
         dirty: wb.isDirty(id),
         held: wb.isAutosaveHeld(id) || doc.missingOnDisk === true,
         saving: wb.isSaving(id),
+        readOnly: wb.isReadOnly(doc),
       });
       if (!ok) return;
       const result = await wb.saveDocument(id, { auto: true });
