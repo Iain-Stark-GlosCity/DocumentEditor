@@ -6,6 +6,7 @@
  */
 import { FormatRegistry } from "./core/registry";
 import { csvProvider } from "./formats/csv";
+import { docxProvider } from "./formats/docx";
 import { markdownProvider } from "./formats/markdown";
 import { jsonProvider } from "./formats/json";
 import { plainTextProvider } from "./formats/plain-text";
@@ -23,5 +24,6 @@ export function createRegistry(): FormatRegistry {
   registry.register(jsonProvider);
   registry.register(yamlProvider);
   registry.register(xmlProvider);
+  registry.register(docxProvider);
   return registry;
 }

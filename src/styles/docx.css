@@ -1,0 +1,76 @@
+/* The DOCX Formatting view: the notation reads as quiet annotations, the document's text as the
+   body. Colours are theme tokens (--syn-meta and --syn-marker are 4.5:1 against the editor
+   background in both themes); nothing relies on colour alone, and high contrast keeps the
+   system colours. */
+
+/* Trailing paragraph comment: muted, slightly smaller, not italic (it is dense). */
+.cm-editor .cm-docx-pcomment,
+.cm-editor .cm-docx-pcomment * {
+  color: var(--syn-meta);
+  font-style: normal;
+  font-weight: normal;
+  font-size: 0.86em;
+}
+
+/* Whole-line annotations: properties, sections, styles, lists. */
+.cm-editor .cm-docx-meta,
+.cm-editor .cm-docx-meta * {
+  color: var(--syn-meta);
+  font-style: normal;
+  font-size: 0.9em;
+}
+
+/* Section banners of the generated appendices. */
+.cm-editor .cm-docx-banner,
+.cm-editor .cm-docx-banner * {
+  color: var(--syn-heading);
+  font-weight: 700;
+  font-style: normal;
+}
+
+.cm-editor .cm-docx-banner {
+  padding-top: 0.6em;
+}
+
+/* Inline tags such as <span …>, <u>, <ins …>: present but quiet. */
+.cm-editor .cm-docx-tag,
+.cm-editor .cm-docx-tag * {
+  color: var(--syn-marker);
+  font-weight: normal;
+  font-style: normal;
+  font-size: 0.9em;
+}
+
+/* Visible whitespace tokens (<tab/>, <nbsp/>, <br/>): a faint box so they read as symbols. */
+.cm-editor .cm-docx-token,
+.cm-editor .cm-docx-token * {
+  color: var(--syn-marker);
+  font-style: normal;
+}
+
+.cm-editor .cm-docx-token {
+  background: var(--syn-code-bg);
+  border-radius: 3px;
+}
+
+/* Raw XML and errors: what the view could not interpret stands out. */
+.cm-editor .cm-docx-raw,
+.cm-editor .cm-docx-raw * {
+  color: var(--syn-keyword);
+  font-style: normal;
+  font-size: 0.86em;
+}
+
+@media (forced-colors: active) {
+  .cm-editor .cm-docx-pcomment *,
+  .cm-editor .cm-docx-meta *,
+  .cm-editor .cm-docx-tag *,
+  .cm-editor .cm-docx-token *,
+  .cm-editor .cm-docx-raw *,
+  .cm-editor .cm-docx-banner * {
+    color: CanvasText;
+  }
+  .cm-editor .cm-docx-token {
+    border: 1px solid CanvasText;
+  }
+}
