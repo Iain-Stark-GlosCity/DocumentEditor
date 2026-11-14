@@ -56,3 +56,26 @@ tests/          fixtures and cross-cutting tests (round-trip, spec conformance)
 - The Rust side cannot be compiled in the Linux dev container (no WebKitGTK). Windows CI is the
   check for Rust code, so keep Rust small, simple and unit tested with `cargo test` where the
   logic is pure (put pure logic in modules that do not depend on `tauri`).
+
+## Adding a format
+
+A format is a folder under `src/formats/<id>/` that exports a `TextFormatProvider` (see
+`src/core/format.ts`). Copy `src/formats/plain-text/` for the smallest example and
+`src/formats/csv/` or `src/formats/html/` for one with a preview.
+
+- Register it with one import and one line in `src/create-registry.ts`. The first format that
+  claims an extension wins. `markdown` is the default for new documents and `text` is the fallback
+  for files nobody claims; never rely on registration order for either.
+- Load a CodeMirror language through `lazyLanguage` (`src/formats/shared/lazy-language.ts`) and
+  anything heavy through `import()`, so it stays out of the startup bundle. Note the render worker
+  builds the same registry, so a format's editor code also lands in the worker bundle.
+- Set `spellcheck: false` for data and code. Give it `outline`, `render`, `commands` and `toolbar`
+  only if it has them; the workbench follows whatever the active document's format declares.
+- Preview HTML is always sanitised (rule 5). Either run it through the shared sanitiser or build it
+  so it is safe by construction (escape every piece of user text) and test that.
+- Tests: unit tests beside the code, and a browser test in `tests/e2e/<id>.spec.ts` that opens a
+  file with `openFile` from `tests/e2e/fixtures.ts`. Tests that need a fixed set of formats must
+  build their own registry, not use `createRegistry()`, so adding a format cannot break them.
+- Browser tests run against the production build: `E2E_PORT=<port> npm run test:e2e`. Use your own
+  port when several copies of the suite run at once.
+
