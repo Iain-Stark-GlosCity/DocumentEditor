@@ -1,6 +1,7 @@
 import { redo, undo } from "@codemirror/commands";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { FormatRegistry } from "../../core/registry";
 import { createRegistry } from "../../create-registry";
 import { MemoryPlatform } from "../../platform/memory";
 import { App } from "../App";
@@ -11,12 +12,27 @@ import { defaultFeatures } from "./index";
 const NOTE = "C:\\docs\\note.md";
 const TEXT = "# Title\n\nSome **bold** words.\n";
 
+/**
+ * Always exactly Markdown and plain text, however many formats the app ships with, so these tests
+ * do not break each time a format is added.
+ */
+function twoFormats(): FormatRegistry {
+  const all = createRegistry();
+  const registry = new FormatRegistry();
+  const markdown = all.byId("markdown");
+  const text = all.byId("text");
+  if (!markdown || !text) throw new Error("The app is missing a format these tests rely on");
+  registry.register(markdown, { default: true });
+  registry.register(text, { fallback: true });
+  return registry;
+}
+
 async function setup(options: { open?: boolean } = {}) {
   const platform = new MemoryPlatform();
   platform.seedFile(NOTE, TEXT);
   const workbench = new Workbench({
     platform,
-    registry: createRegistry(),
+    registry: twoFormats(),
     features: defaultFeatures,
     settingsSaveDelayMs: 5,
   });
