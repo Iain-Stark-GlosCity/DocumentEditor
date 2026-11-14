@@ -81,9 +81,13 @@ export class MemoryPlatform implements Platform {
   /** Set to make the next binary write or copy reject with this error (then clears). */
   failNextBinaryWrite: Error | null = null;
 
-  /** Puts a binary file on the fake disk (for example an image to be dropped). */
+  /** Modification times of binary files, from the same clock as text files. */
+  private readonly binaryModified = new Map<string, number>();
+
+  /** Puts a binary file on the fake disk (for example an image to be dropped, or a DOCX). */
   seedBinary(path: string, bytes: Uint8Array | number[] = [1, 2, 3]): void {
     this.binaryFiles.set(path, Uint8Array.from(bytes));
+    this.binaryModified.set(path, this.tick());
   }
 
   /** Simulates files dropped from Explorer at CSS-pixel position (x, y). */
@@ -104,9 +108,17 @@ export class MemoryPlatform implements Platform {
     return { text: file.text, format: { ...file.format }, modifiedMs: file.modifiedMs };
   }
 
+  async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+    const bytes = this.binaryFiles.get(path);
+    if (!bytes) throw new Error(`File not found: ${path}`);
+    return { bytes: Uint8Array.from(bytes), modifiedMs: this.binaryModified.get(path) ?? 0 };
+  }
+
   async statFile(path: string): Promise<{ modifiedMs: number } | null> {
     const file = this.files.get(path);
-    return file ? { modifiedMs: file.modifiedMs } : null;
+    if (file) return { modifiedMs: file.modifiedMs };
+    const modifiedMs = this.binaryModified.get(path);
+    return this.binaryFiles.has(path) ? { modifiedMs: modifiedMs ?? 0 } : null;
   }
 
   async writeFile(path: string, text: string, format: FileFormat): Promise<{ modifiedMs: number }> {
@@ -123,6 +135,7 @@ export class MemoryPlatform implements Platform {
     this.takeBinaryFailure();
     if (!options.overwrite && (await this.fileExists(path))) throw new FileExistsError(path);
     this.binaryFiles.set(path, Uint8Array.from(bytes));
+    this.binaryModified.set(path, this.tick());
   }
 
   async copyFile(from: string, to: string, options: { overwrite: boolean }): Promise<void> {
@@ -132,8 +145,10 @@ export class MemoryPlatform implements Platform {
     const text = this.files.get(from);
     if (!source && !text) throw new Error(`File not found: ${from}`);
     if (!options.overwrite && (await this.fileExists(to))) throw new FileExistsError(to);
-    if (source) this.binaryFiles.set(to, Uint8Array.from(source));
-    else if (text) {
+    if (source) {
+      this.binaryFiles.set(to, Uint8Array.from(source));
+      this.binaryModified.set(to, this.tick());
+    } else if (text) {
       this.files.set(to, { ...text, format: { ...text.format }, modifiedMs: this.tick() });
     }
   }

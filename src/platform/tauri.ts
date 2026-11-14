@@ -49,6 +49,11 @@ export class TauriPlatform implements Platform {
     return call<FileData>("read_file", { path });
   }
 
+  async readBinaryFile(): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+    // The Rust command arrives with the container platform; until then nothing asks for it.
+    throw new Error("Reading binary files is not available yet");
+  }
+
   statFile(path: string): Promise<{ modifiedMs: number } | null> {
     return call<{ modifiedMs: number } | null>("stat_file", { path });
   }

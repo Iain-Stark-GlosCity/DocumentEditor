@@ -29,6 +29,17 @@ export interface TextFormatProvider {
   /** View modes this format supports. Must include `source`. */
   readonly viewModes: readonly ViewMode[];
   /**
+   * True for a generated, view-only format: the editor refuses edits, Save is unavailable, and the
+   * document can never be unsaved. Saving a copy under another name still works.
+   */
+  readonly readOnly?: boolean;
+  /**
+   * For a format whose file is not text on disk, such as a DOCX (a zip). The platform reads the
+   * file's bytes and `decode` turns them into the text the editor shows. Pair it with
+   * `readOnly: true` unless the format can also write the bytes back.
+   */
+  readonly binary?: BinaryView;
+  /**
    * Set to false for formats where spell-checking is only noise (data and code). The user's own
    * spellcheck setting still applies to every other format. Default true.
    */
@@ -68,6 +79,17 @@ export interface TextFormatProvider {
   imageSyntax?(path: string, alt: string): string;
   /** How a document of this format links to another file. Same `path` rules as `imageSyntax`. */
   linkSyntax?(path: string, text: string): string;
+}
+
+/** How a format that is a binary file on disk becomes text in the editor. */
+export interface BinaryView {
+  /**
+   * `zip` means the file is a zip archive whose parts can be browsed and opened one by one (see
+   * `src/core/container-path.ts`). It is what DOCX, ODT, XLSX, PPTX and EPUB are.
+   */
+  readonly archive?: "zip";
+  /** Turns the file's bytes into the text to show. May throw if the file is damaged. */
+  decode(bytes: Uint8Array, context: { path: string }): Promise<string>;
 }
 
 export interface EditorContext {

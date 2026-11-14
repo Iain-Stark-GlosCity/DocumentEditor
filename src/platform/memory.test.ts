@@ -158,3 +158,25 @@ describe("MemoryPlatform links and assets", () => {
     expect(drops).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("MemoryPlatform binary files", () => {
+  it("reads back seeded bytes with a modification time, and stats them", async () => {
+    const platform = new MemoryPlatform();
+    platform.seedBinary("/a/report.docx", [80, 75, 3, 4]);
+    const { bytes, modifiedMs } = await platform.readBinaryFile("/a/report.docx");
+    expect([...bytes]).toEqual([80, 75, 3, 4]);
+    expect((await platform.statFile("/a/report.docx"))?.modifiedMs).toBe(modifiedMs);
+    expect(await platform.statFile("/a/missing.docx")).toBeNull();
+    await expect(platform.readBinaryFile("/a/missing.docx")).rejects.toThrow("not found");
+  });
+
+  it("moves the modification time forward when bytes are written", async () => {
+    const platform = new MemoryPlatform();
+    platform.seedBinary("/a/report.docx", [1]);
+    const before = (await platform.statFile("/a/report.docx"))?.modifiedMs ?? 0;
+    await platform.writeBinaryFile("/a/report.docx", Uint8Array.from([2]), { overwrite: true });
+    const after = (await platform.statFile("/a/report.docx"))?.modifiedMs ?? 0;
+    expect(after).toBeGreaterThan(before);
+    expect([...(await platform.readBinaryFile("/a/report.docx")).bytes]).toEqual([2]);
+  });
+});

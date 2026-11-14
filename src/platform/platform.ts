@@ -79,8 +79,37 @@ export interface FilesDroppedEvent {
 /** Where an Explorer drag currently is over the window (CSS pixels), or null once it has left. */
 export type FileDragPosition = { x: number; y: number } | null;
 
+/** One part of a container file, as listed by `ContainerAccess.listParts`. */
+export interface ContainerPart {
+  /** Name inside the archive, with `/` separators. */
+  name: string;
+  /** Uncompressed size in bytes. */
+  size: number;
+  /** True if the part can be opened as text (XML, rels, plain text); false for images, fonts and so on. */
+  text: boolean;
+}
+
+/**
+ * Browsing a container file (DOCX, ODT, XLSX, PPTX, EPUB). Present only on a platform that can
+ * open archives; the workbench checks for it before offering to.
+ */
+export interface ContainerAccess {
+  /** The container a path belongs to: itself if it is a container file, the archive for a part path, else null. */
+  containerOf(path: string): string | null;
+  /** The parts of a container, in archive order. Rejects if the file is not a readable archive. */
+  listParts(container: string): Promise<ContainerPart[]>;
+}
+
 export interface Platform {
+  /**
+   * Reads a file as text. For a path inside a container (see `src/core/container-path.ts`) it is
+   * the part's text; for a container file whose format has a `binary` view, the text of that view.
+   */
   readFile(path: string): Promise<FileData>;
+  /** Reads a file's raw bytes. */
+  readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }>;
+  /** Present when the platform can browse container files. */
+  readonly containers?: ContainerAccess;
   /** The file's modified time without reading it, or null if it does not exist. */
   statFile(path: string): Promise<{ modifiedMs: number } | null>;
   /** Atomic: writes a temporary file beside the target, then renames over it. */
