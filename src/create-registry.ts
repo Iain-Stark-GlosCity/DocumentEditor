@@ -8,6 +8,7 @@ import { FormatRegistry } from "./core/registry";
 import { csvProvider } from "./formats/csv";
 import { markdownProvider } from "./formats/markdown";
 import { plainTextProvider } from "./formats/plain-text";
+import { htmlProvider } from "./formats/html";
 
 export function createRegistry(): FormatRegistry {
   const registry = new FormatRegistry();
@@ -15,5 +16,6 @@ export function createRegistry(): FormatRegistry {
   registry.register(markdownProvider, { default: true });
   registry.register(plainTextProvider, { fallback: true });
   registry.register(csvProvider);
+  registry.register(htmlProvider);
   return registry;
 }
