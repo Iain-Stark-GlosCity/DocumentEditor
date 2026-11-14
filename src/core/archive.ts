@@ -39,6 +39,7 @@ export interface ZipArchive {
   replace(name: string, bytes: Uint8Array): Uint8Array;
 }
 
-export function readZip(_bytes: Uint8Array): ZipArchive {
+export function readZip(bytes: Uint8Array): ZipArchive {
+  void bytes;
   throw new ArchiveError("Zip support has not been built yet");
 }
