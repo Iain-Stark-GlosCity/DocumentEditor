@@ -1,5 +1,6 @@
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import type { TextFormatProvider } from "../../core/format";
+import { outlineFromState } from "../markdown/outline";
 import { docxAnnotations } from "./annotations";
 
 /**
@@ -24,5 +25,8 @@ export const docxProvider: TextFormatProvider = {
       return decodeDocx(bytes, context);
     },
   },
+  // The view's headings are ATX Markdown on the same Lezer grammar, so the Markdown outline
+  // reads them directly; HTML comments and inline tags are already skipped as markup there.
+  outline: outlineFromState,
   editorExtensions: () => [markdown({ base: markdownLanguage, addKeymap: false }), docxAnnotations],
 };

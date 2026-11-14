@@ -144,6 +144,10 @@ export const externalChanges: Feature = {
       watch: Watch,
       data: Awaited<ReturnType<typeof wb.platform.readFile>>,
     ): void {
+      // Derived data (a Formatting view of a binary file) holds no edits and is regenerated when the
+      // container changes, often by this app's own save of one of its parts. Refresh it quietly.
+      const provider = wb.registry.byId(doc.providerId);
+      const derived = provider?.readOnly === true && provider.binary !== undefined;
       const buffer = wb.getText(doc.id) ?? doc.savedText;
       const verdict = judgeDiskChange({
         knownModifiedMs: doc.modifiedMs,
@@ -162,9 +166,14 @@ export const externalChanges: Feature = {
           return;
         case "reload":
           wb.reloadFromDisk(doc.id, data);
-          wb.notify({ message: `${doc.title} changed on disk and was reloaded.` });
+          if (!derived) wb.notify({ message: `${doc.title} changed on disk and was reloaded.` });
           return;
         case "conflict":
+          if (derived) {
+            // Nothing here can be unsaved, so there is nothing to ask about.
+            wb.reloadFromDisk(doc.id, data);
+            return;
+          }
           raiseConflict(doc, watch, data.modifiedMs);
           return;
       }

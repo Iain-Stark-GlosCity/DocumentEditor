@@ -15,11 +15,11 @@ Quarterly report <!-- p style=Title -->
 
 # Introduction <!-- p style="Heading 1" -->
 
-Sales rose **12%** in the quarter<span style="Footnote Reference">[^1]</span>, led by *new markets*. <span colour="C00000">Red text</span>, <span highlight="yellow">highlighted</span>, <span font="Courier New" size="9pt">Courier 9pt</span>, <u type="double" colour="0000FF">double underline</u>, H<sub>2</sub>O and E=mc<sup>2</sup>, ~~struck~~, <span small-caps>small caps</span>.
+Sales rose **12%** in the quarter[^1], led by *new markets*. <span colour="C00000">Red text</span>, <span highlight="yellow">highlighted</span>, <span font="Courier New" size="9pt">Courier 9pt</span>, <u type="double" colour="0000FF">double underline</u>, H<sub>2</sub>O and E=mc<sup>2</sup>, ~~struck~~, <span small-caps>small caps</span>.
 
 Literal characters: 2 \* 3 = 6, file_name, \<tag>, \[x\], \# not a heading, a<tab/>tab, a line<br/>break and a non-breaking<nbsp/>space. <!-- p keep-next spacing-before=12pt spacing-after=6pt line-spacing=1.5 indent-left=36pt hanging=18pt align=justify -->
 
-<comment id="0">Revenue was 4.2 million.</comment><comment-ref id="0"/> See [<span style="Hyperlink">the full report</span>](https://example.com/report) and [<span style="Hyperlink">the results</span>](#results).
+<comment id="0">Revenue was 4.2 million.</comment><comment-ref id="0"/> See [the full report](https://example.com/report) and [the results](#results).
 
 <ins id="1" author="Ravi Patel" date="2024-05-02T09:00:00Z">Inserted words</ins> and <del id="2" author="Ravi Patel" date="2024-05-02T09:05:00Z">deleted words</del>.
 
@@ -74,20 +74,20 @@ A quotation from the board. <!-- p style=IntenseQuote -->
 <!-- ==== Footnotes ==== -->
 
 <!-- footnote -1 type=separator (Word's separator line, not a note) -->
-<span style="Footnote Reference"><note-number/></span><separator/> <!-- p spacing-after=0pt line-spacing=1 -->
+<note-number/><separator/> <!-- p spacing-after=0pt line-spacing=1 -->
 
 <!-- footnote 0 type=continuationSeparator (Word's separator line, not a note) -->
-<span style="Footnote Reference"><note-number/></span><continuation-separator/> <!-- p spacing-after=0pt line-spacing=1 -->
+<note-number/><continuation-separator/> <!-- p spacing-after=0pt line-spacing=1 -->
 
-[^1]: <span style="Footnote Reference"><note-number/></span>Source: internal sales data, unaudited.
+[^1]: <note-number/>Source: internal sales data, unaudited.
 
 <!-- ==== Endnotes ==== -->
 
 <!-- endnote -1 type=separator (Word's separator line, not a note) -->
-<span style="Endnote Reference"><note-number/></span><separator/> <!-- p spacing-after=0pt line-spacing=1 -->
+<note-number/><separator/> <!-- p spacing-after=0pt line-spacing=1 -->
 
 <!-- endnote 0 type=continuationSeparator (Word's separator line, not a note) -->
-<span style="Endnote Reference"><note-number/></span><continuation-separator/> <!-- p spacing-after=0pt line-spacing=1 -->
+<note-number/><continuation-separator/> <!-- p spacing-after=0pt line-spacing=1 -->
 
 <!-- ==== Comments ==== -->
 

@@ -345,7 +345,7 @@ describe("revisions, content controls and smart tags", () => {
 
   it("shows inline content controls with their type and placeholder state", () => {
     expect(body(H.SDT_INLINE)).toBe(
-      'Date: <sdt type="date" alias="Signed on" tag="signDate" id="12345" placeholder-showing date-format="dd/MM/yyyy"><span style="PlaceholderText">Click to enter a date.</span></sdt> Agree: <sdt type="checkbox" id="99" checked="yes">☒</sdt>',
+      'Date: <sdt type="date" alias="Signed on" tag="signDate" id="12345" placeholder-showing date-format="dd/MM/yyyy">Click to enter a date.</sdt> Agree: <sdt type="checkbox" id="99" checked="yes">☒</sdt>',
     );
   });
 

@@ -491,7 +491,7 @@ function indentBlocks(blocks: string[], first: string): string {
 function notes(r: Renderer, pkg: Package, part: string, prefix: string, elName: string): string[] {
   const doc = pkg.xml(part);
   if (!doc?.root) return [comment(`${part} is missing or holds no XML`)];
-  const restore = r.enter(part, doc);
+  const restore = r.enter(part, doc, "notes");
   const lines: string[] = [];
   for (const note of elements(doc.root)) {
     if (note.name !== elName) {
@@ -556,7 +556,7 @@ function comments(
     if (p) shown.add(p);
   }
   const byParaId = new Map<string, string>();
-  const restore = r.enter(part, doc);
+  const restore = r.enter(part, doc, "comments");
   const lines: string[] = [];
   for (const c of elements(doc.root)) {
     if (c.name !== "w:comment") continue;
@@ -617,7 +617,7 @@ function headersFooters(
       lines.push(comment(`${part} is missing or holds no XML`));
       continue;
     }
-    const restore = r.enter(part, doc);
+    const restore = r.enter(part, doc, "header-footer");
     try {
       lines.push(...r.blocks(doc.root));
     } finally {
