@@ -1,0 +1,304 @@
+/* The Integrity pane and its status bar item. Severity is always an icon and a word, never colour alone. */
+
+.integrity {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-chrome);
+}
+
+.integrity-toolbar,
+.integrity-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.integrity-filters {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.integrity-severities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.integrity-button,
+.integrity-toggle,
+.integrity-status {
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.integrity-button:hover:not(:disabled),
+.integrity-toggle:hover,
+.integrity-status:hover {
+  background: var(--bg-hover);
+}
+
+.integrity-button:disabled {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
+/* A pressed toggle is filled and shows a tick-like border weight, so it is not colour alone. */
+.integrity-toggle[aria-pressed="true"] {
+  background: var(--bg-pressed);
+  border-color: var(--border-strong);
+  font-weight: 600;
+}
+
+.integrity-toggle[aria-pressed="false"] {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.integrity-button:focus-visible,
+.integrity-toggle:focus-visible,
+.integrity-status:focus-visible,
+.integrity-filter:focus-visible,
+.integrity-location:focus-visible,
+.integrity-row:focus-visible,
+.integrity-group:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.integrity-status {
+  padding: 0 6px;
+  font-size: inherit;
+  border-color: transparent;
+}
+
+.integrity-filter {
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.integrity-copied {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.integrity-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.integrity-summary {
+  margin: 0;
+  padding: 6px 8px 0;
+  font-weight: 600;
+}
+
+.integrity-note {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-muted);
+}
+
+.integrity-error {
+  color: var(--danger-fg);
+  background: var(--danger-bg);
+}
+
+.integrity-error p {
+  margin: 0;
+}
+
+.integrity-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+  background: var(--bg);
+}
+
+.integrity-group {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 8px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: var(--bg-chrome);
+  cursor: pointer;
+}
+
+.integrity-twisty {
+  flex: none;
+  width: 1em;
+  color: var(--fg-muted);
+}
+
+.integrity-group-name {
+  flex: 1 1 auto;
+}
+
+.integrity-meta {
+  flex: none;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.integrity-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 8px 4px 20px;
+  cursor: pointer;
+}
+
+.integrity-row:hover,
+.integrity-group:hover {
+  background: var(--bg-hover);
+}
+
+.integrity-row[aria-expanded="true"] {
+  background: var(--bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.integrity-severity {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.integrity-row--error .integrity-severity {
+  color: var(--danger-fg);
+}
+
+.integrity-title {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.integrity-details {
+  padding: 4px 12px 8px 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.integrity-why {
+  margin: 0 0 6px;
+}
+
+.integrity-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.integrity-fact {
+  display: contents;
+}
+
+.integrity-facts dt {
+  color: var(--fg-muted);
+}
+
+.integrity-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.integrity-locations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.integrity-location {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.integrity-location:hover {
+  background: var(--bg-hover);
+}
+
+.integrity-where {
+  color: var(--fg-muted);
+}
+
+@media (forced-colors: active) {
+  .integrity-row[aria-expanded="true"] {
+    box-shadow: none;
+    border-inline-start: 4px solid Highlight;
+  }
+
+  .integrity-row:focus-visible,
+  .integrity-group:focus-visible {
+    outline: 2px solid CanvasText;
+  }
+
+  .integrity-toggle[aria-pressed="true"] {
+    forced-color-adjust: none;
+    color: HighlightText;
+    background: Highlight;
+  }
+
+  .integrity-location {
+    color: LinkText;
+  }
+
+  .integrity-where,
+  .integrity-meta,
+  .integrity-facts dt {
+    color: GrayText;
+  }
+
+  .integrity-error {
+    border: 1px solid CanvasText;
+  }
+
+  .integrity-status {
+    border-color: ButtonBorder;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .integrity * {
+    transition: none;
+  }
+}
