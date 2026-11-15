@@ -62,3 +62,23 @@ Three integrity rules are flagged as uncertain until checked against real docume
   both tools; Phase 2 native ChatGPT only if the project is open-sourced. Parked by the user.
 - **Open-source or licence** decision, and **code signing** and installer file associations.
 - **Office-suite direction** (XLSX/PPTX views, an editable CSV grid) is an idea, not a commitment.
+
+## Review rounds (15 Nov 2026)
+
+Two rounds of agent reviews found and fixed about 60 defects across the resolver, Explain pane,
+viewers, worker client, workbench (serialised saves, close and Save As safety, dialog focus,
+contrast), Markdown editing and the preview sanitiser (forged `asset:` addresses), the Formatting
+view (unclosed fields, hidden control characters), and the save pipeline (central-directory bytes,
+byte re-check before writing, atomic recovery snapshots, long file names). Open items they left,
+worth a decision or real-machine testing:
+
+- `.jsonc` treats trailing commas as an error while `.json` warns; probably backwards.
+- Tauri `csp: null` in `tauri.conf.json` (the real policy is the meta tag in `index.html`); check in
+  WebView2, along with loading a font from bytes and the asset scope.
+- Notifications are not in a persistent live region; the ribbon "More" button's ARIA role; disabled
+  menu items are skipped by arrow keys. Needs real screen-reader testing.
+- Converting nested bullets to a numbered list breaks nesting; the editor and preview can disagree
+  on table columns when a code span contains a pipe.
+- Remaining save-pipeline gaps: a tiny window between the final check and the rename; leftover
+  temp files after a crash; atomic replace drops alternate data streams and ACLs.
+- After any worker error the DOCX worker stays off for the session.
