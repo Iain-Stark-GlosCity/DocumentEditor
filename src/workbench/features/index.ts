@@ -17,6 +17,7 @@ import { parts } from "./parts";
 import { readOnly } from "./read-only";
 import { recovery } from "./recovery";
 import { ribbon } from "./ribbon";
+import { integrity } from "./integrity";
 import { help } from "./help";
 import { images } from "./images";
 import { longLines } from "./long-lines";
@@ -52,6 +53,7 @@ export const defaultFeatures: readonly Feature[] = [
   focusMode,
   outline,
   parts,
+  integrity,
   readOnly,
   // F6 and Shift+F6 cycle every visible pane (see pane-focus.ts).
   paneFocus,

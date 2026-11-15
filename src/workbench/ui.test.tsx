@@ -76,6 +76,7 @@ describe("menu bar", () => {
       "Go to next headingAlt+PageDown",
       "Go to previous headingAlt+PageUp",
       "Parts of the open fileCtrl+Alt+P",
+      "Document integrityCtrl+Alt+I",
       "Theme›",
       "View mode›",
       "Split previewAlt+P",

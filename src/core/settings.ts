@@ -73,6 +73,8 @@ export const SETTINGS_SCHEMA = {
   "outline.visible": bool(false),
   /** The Parts pane, shown whenever the open file is a container (a DOCX and the like). */
   "parts.visible": bool(true),
+  /** The Integrity pane. Off by default: the Parts pane is already shown on the left. */
+  "integrity.visible": bool(false),
   "ui.paneSizes": paneSizes(),
   /** The formatting ribbon between the menu bar and the tabs. */
   "ui.ribbon": bool(true),
