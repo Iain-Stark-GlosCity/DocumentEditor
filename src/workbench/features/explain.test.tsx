@@ -237,3 +237,24 @@ describe("the Explain pane", () => {
     expect(remove).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("pictures in the Explain pane", () => {
+  it("lists the same picture drawn twice without a React key clash, each button named", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const picture = { part: "word/media/image1.png", alt: "", size: "1 × 1 cm" };
+    await setup({
+      answer: (l) => ({
+        ...explanation(l),
+        pictures: [
+          { ...picture, name: "Logo" },
+          { ...picture, name: "Logo again" },
+        ],
+      }),
+    });
+    moveTo(1);
+    await within(pane()).findByRole("button", { name: "Show picture Logo again" });
+    expect(within(pane()).getByRole("button", { name: "Show picture Logo" })).toBeTruthy();
+    const keyWarnings = errors.mock.calls.filter((call) => String(call[0]).includes("same key"));
+    expect(keyWarnings).toEqual([]);
+  });
+});

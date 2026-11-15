@@ -24,7 +24,7 @@ import {
 import type { ContainerPart } from "../../platform/platform";
 import type { Feature, FeatureComponentProps } from "../feature";
 import { useActiveDocument, useSetting } from "../hooks";
-import { showBinaryPart } from "./binary-part";
+import { onDidReplacePart, showBinaryPart } from "./binary-part";
 import type { Workbench } from "../workbench";
 
 const TYPE_AHEAD_MS = 700;
@@ -88,12 +88,19 @@ function PartsPanel({ workbench, container }: FeatureComponentProps & { containe
     [workbench],
   );
 
-  // List when the container changes, and again after any part of it is saved.
+  // List when the container changes, and again after any part of it is saved or replaced.
   useEffect(() => {
     load(container);
-    return workbench.onDidSave((event) => {
+    const offSave = workbench.onDidSave((event) => {
       if (containerOfPath(workbench, event.path) === container) load(container);
     });
+    const offReplace = onDidReplacePart((changed) => {
+      if (changed === container) load(container);
+    });
+    return () => {
+      offSave();
+      offReplace();
+    };
   }, [container, load, workbench]);
 
   const parts =

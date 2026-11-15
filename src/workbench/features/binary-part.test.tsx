@@ -1,8 +1,9 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DOCX, setupContainers, type Setup } from "../container-test-helpers";
 import {
   MAX_PREVIEW_BYTES,
+  MAX_REPLACEMENT_BYTES,
   describeKind,
   describeSize,
   extensionOf,
@@ -340,14 +341,157 @@ describe("the binary part dialog", () => {
 
 describe("sniffPicture", () => {
   const ascii = (t: string) => Uint8Array.from([...t].map((c) => c.charCodeAt(0)));
+  /** A BMP file header followed by a DIB header of the given size. */
+  const bmp = (dibSize: number) => {
+    const b = new Uint8Array(54);
+    b.set(ascii("BM"));
+    new DataView(b.buffer).setUint32(14, dibSize, true);
+    return b;
+  };
   it("names the supported picture types by their first bytes only", () => {
     expect(sniffPicture(PNG)).toBe("png");
     expect(sniffPicture(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0]))).toBe("jpeg");
-    expect(sniffPicture(ascii("GIF89a...."))).toBe("gif");
-    expect(sniffPicture(ascii("BM" + "x".repeat(20)))).toBe("bmp");
+    expect(sniffPicture(ascii("GIF89a\u0001\u0000\u0001\u0000\u0000\u0000\u0000"))).toBe("gif");
+    expect(sniffPicture(ascii("GIF87a\u0001\u0000\u0001\u0000\u0000\u0000\u0000"))).toBe("gif");
+    expect(sniffPicture(bmp(40))).toBe("bmp");
+    expect(sniffPicture(bmp(124))).toBe("bmp");
     expect(sniffPicture(ascii("RIFF....WEBPVP8 "))).toBe("webp");
+    expect(sniffPicture(ascii("RIFF....WEBPVP8L"))).toBe("webp");
     expect(sniffPicture(ascii("<svg xmlns='x'/>"))).toBeNull();
     expect(sniffPicture(new Uint8Array(3))).toBeNull();
     expect(sniffPicture(TTF)).toBeNull();
+  });
+
+  it("is strict about the signature and refuses truncated headers", () => {
+    // PNG: all eight signature bytes, then the IHDR chunk that must come first.
+    expect(sniffPicture(PNG.slice(0, 8))).toBeNull();
+    expect(sniffPicture(PNG.slice(0, 32))).toBeNull();
+    const badSignature = PNG.slice();
+    badSignature[4] = 0x0a; // \r\n turned into \n\n: a PNG damaged by a text transfer
+    expect(sniffPicture(badSignature)).toBeNull();
+    // GIF: only the two real versions, with a full logical screen descriptor.
+    expect(sniffPicture(ascii("GIF8xa..........."))).toBeNull();
+    expect(sniffPicture(ascii("GIF89a"))).toBeNull();
+    // BMP: any text starting "BM" is not a bitmap; the DIB header size must be a real one.
+    expect(sniffPicture(ascii("BM" + "x".repeat(60)))).toBeNull();
+    expect(sniffPicture(bmp(40).slice(0, 20))).toBeNull();
+    // WEBP: a RIFF file of another kind, or one without a VP8 chunk, is not a WEBP picture.
+    expect(sniffPicture(ascii("RIFF....WAVEfmt "))).toBeNull();
+    expect(sniffPicture(ascii("RIFF....WEBPJUNK"))).toBeNull();
+    expect(sniffPicture(ascii("RIFF....WEBP"))).toBeNull();
+    // JPEG: the three-byte start alone is not a picture.
+    expect(sniffPicture(Uint8Array.from([0xff, 0xd8, 0xff]))).toBeNull();
+  });
+});
+
+describe("Replace picture…", () => {
+  const PICKED = "C:\\pics\\new.png";
+  /** Another valid PNG: the same picture with a different last byte. */
+  const OTHER = Uint8Array.from(PNG, (b, i) => (i === PNG.length - 1 ? b ^ 0xff : b));
+  const partBytes = (s: Setup, name = "image1.png") =>
+    Array.from(s.platform.binaryFiles.get(`${MEDIA}/${name}`) ?? []);
+  const confirm = () => screen.findByRole("alertdialog", { name: "Replace image1.png?" });
+
+  async function startReplace(s: Setup, picked: Uint8Array) {
+    s.platform.seedBinary(PICKED, picked);
+    s.platform.queueOpenDialog([PICKED]);
+    await open(s, "word/media/image1.png");
+    const button = screen.getByRole("button", { name: "Replace picture…" });
+    button.focus();
+    fireEvent.click(button);
+    return button;
+  }
+
+  it("asks first with Cancel focused, then replaces, keeps focus, and refreshes the Parts pane", async () => {
+    const s = await setup();
+    const listedBefore = s.containers.listed.length;
+    await startReplace(s, OTHER);
+    const ask = await confirm();
+    expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "Cancel" }));
+    expect(ask.textContent).toContain("This cannot be undone in the editor.");
+    fireEvent.click(within(ask).getByRole("button", { name: "Replace picture" }));
+    await waitFor(() => expect(partBytes(s)).toEqual(Array.from(OTHER)));
+    await waitFor(() => expect(messages(s).join("\n")).toContain("Replaced image1.png."));
+    // The viewer shows the new picture, and focus stays where the person left it.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Replace picture…" })),
+    );
+    // The Parts pane shows sizes, so it must list the parts again.
+    await waitFor(() => expect(s.containers.listed.length).toBeGreaterThan(listedBefore));
+  });
+
+  it("writes nothing when cancelled and gives focus back to the button", async () => {
+    const s = await setup();
+    const button = await startReplace(s, OTHER);
+    const ask = await confirm();
+    fireEvent.keyDown(within(ask).getByRole("button", { name: "Cancel" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(partBytes(s)).toEqual(Array.from(PNG));
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("does not rewrite the file for the very same picture", async () => {
+    const s = await setup();
+    const write = vi.spyOn(s.platform, "writeBinaryFile");
+    await startReplace(s, PNG.slice());
+    await waitFor(() =>
+      expect(messages(s).join("\n")).toContain(
+        "That is the same picture as image1.png. Nothing was changed.",
+      ),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("refuses a picture over the limit before asking, and says nothing was changed", async () => {
+    const s = await setup();
+    const huge = new Uint8Array(MAX_REPLACEMENT_BYTES + 1);
+    huge.set(PNG);
+    const write = vi.spyOn(s.platform, "writeBinaryFile");
+    await startReplace(s, huge);
+    await waitFor(() =>
+      expect(messages(s).join("\n")).toContain(
+        "That picture is too large (the limit is 50 MB). Nothing was changed.",
+      ),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("refuses a picture of another type, naming both", async () => {
+    const s = await setup();
+    await startReplace(s, Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]));
+    await waitFor(() =>
+      expect(messages(s).join("\n")).toContain(
+        "That is a JPEG picture, but image1.png is a PNG. Convert it to PNG first; nothing was changed.",
+      ),
+    );
+    expect(partBytes(s)).toEqual(Array.from(PNG));
+  });
+
+  it("says so, and changes nothing, when the save path refuses", async () => {
+    const s = await setup();
+    await startReplace(s, OTHER);
+    const ask = await confirm();
+    vi.spyOn(s.platform, "writeBinaryFile").mockRejectedValue(
+      new Error(
+        "report.docx changed on disk while saving word/media/image1.png. Nothing was saved.",
+      ),
+    );
+    fireEvent.click(within(ask).getByRole("button", { name: "Replace picture" }));
+    await waitFor(() =>
+      expect(messages(s).join("\n")).toContain(
+        "Could not replace image1.png: report.docx changed on disk while saving word/media/image1.png. Nothing was saved.",
+      ),
+    );
+    expect(partBytes(s)).toEqual(Array.from(PNG));
+  });
+
+  it("is not offered for metafiles or SVG", async () => {
+    const s = await setup({ "a.emf": Uint8Array.from([1, 0, 0, 0]), "b.svg": PNG });
+    await open(s, "word/media/a.emf");
+    expect(screen.queryByRole("button", { name: "Replace picture…" })).toBeNull();
+    await open(s, "word/media/b.svg");
+    expect(screen.queryByRole("button", { name: "Replace picture…" })).toBeNull();
   });
 });

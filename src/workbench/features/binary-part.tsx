@@ -1,7 +1,7 @@
 /**
  * Looking at a binary part of a container (an image, a font, an embedded object): a dialog that
- * says what it is and how big, previews it when it is a picture, and saves a copy to disk. The
- * part's bytes are read afresh from the file. The preview is a `data:` URL in an `<img>`, which
+ * says what it is and how big, previews it when it is a picture, saves a copy to disk, and can
+ * replace a picture with one of the same type. The part's bytes are read afresh from the file. The preview is a `data:` URL in an `<img>`, which
  * the strict CSP already allows and which can never run script.
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
@@ -106,16 +106,37 @@ export async function showBinaryPart(
   }
 }
 
-/** The picture type the first bytes show, or null if they are not one of the supported pictures. */
+/** The sizes a BMP's DIB header can have (core, OS/2, info, the v2 to v5 headers). */
+const BMP_DIB_SIZES = new Set([12, 16, 40, 52, 56, 64, 108, 124]);
+
+/**
+ * The picture type the first bytes show, or null if they are not one of the supported pictures.
+ * It checks each type's full signature and that its fixed header is all there, so a file cut off
+ * at the start or any text that happens to begin "BM" is refused. It does not decode the picture.
+ */
 export function sniffPicture(bytes: Uint8Array): string | null {
   const at = (i: number, text: string) =>
     [...text].every((c, k) => bytes[i + k] === c.charCodeAt(0));
-  if (bytes.length >= 8 && bytes[0] === 0x89 && at(1, "PNG")) return "png";
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+  const u32 = (i: number) =>
+    ((bytes[i] ?? 0) | ((bytes[i + 1] ?? 0) << 8) | ((bytes[i + 2] ?? 0) << 16)) +
+    (bytes[i + 3] ?? 0) * 0x1000000;
+  // PNG: the 8-byte signature, then the 25-byte IHDR chunk that must come first.
+  if (bytes.length >= 33 && bytes[0] === 0x89 && at(1, "PNG\r\n\u001a\n") && at(12, "IHDR"))
+    return "png";
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
     return "jpeg";
-  if (bytes.length >= 6 && at(0, "GIF8")) return "gif";
-  if (bytes.length >= 14 && at(0, "BM")) return "bmp";
-  if (bytes.length >= 12 && at(0, "RIFF") && at(8, "WEBP")) return "webp";
+  // GIF: the header and the 7-byte logical screen descriptor.
+  if (bytes.length >= 13 && (at(0, "GIF87a") || at(0, "GIF89a"))) return "gif";
+  // BMP: the 14-byte file header and a DIB header of a size that exists.
+  if (bytes.length >= 26 && at(0, "BM") && BMP_DIB_SIZES.has(u32(14))) return "bmp";
+  // WEBP: a RIFF file of type WEBP whose first chunk is one of the VP8 kinds.
+  if (
+    bytes.length >= 16 &&
+    at(0, "RIFF") &&
+    at(8, "WEBP") &&
+    (at(12, "VP8 ") || at(12, "VP8L") || at(12, "VP8X"))
+  )
+    return "webp";
   return null;
 }
 
@@ -123,6 +144,23 @@ export function sniffPicture(bytes: Uint8Array): string | null {
 function typeOfName(name: string): string | null {
   const ext = extensionOf(name);
   return ext === "jpg" ? "jpeg" : IMAGE_TYPES[ext] ? ext : null;
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+const replacedListeners = new Set<(container: string) => void>();
+
+/**
+ * Calls back with the container after a part of it was replaced from the viewer. That write is
+ * not a document save, so views that list the container's parts (and their sizes) listen here.
+ */
+export function onDidReplacePart(listener: (container: string) => void): () => void {
+  replacedListeners.add(listener);
+  return () => void replacedListeners.delete(listener);
 }
 
 /** The biggest picture accepted as a replacement. */
@@ -163,7 +201,10 @@ async function replacePicture(wb: Workbench, info: BinaryPartInfo): Promise<void
     return;
   }
   if (bytes.length > MAX_REPLACEMENT_BYTES) {
-    wb.notify({ kind: "error", message: "That picture is too large (the limit is 50 MB)." });
+    wb.notify({
+      kind: "error",
+      message: "That picture is too large (the limit is 50 MB). Nothing was changed.",
+    });
     return;
   }
   const found = sniffPicture(bytes);
@@ -174,6 +215,20 @@ async function replacePicture(wb: Workbench, info: BinaryPartInfo): Promise<void
         ? `That is a ${found.toUpperCase()} picture, but ${info.name} is a ${wanted.toUpperCase()}. Convert it to ${wanted.toUpperCase()} first; nothing was changed.`
         : `That file is not a ${wanted.toUpperCase()} picture. Nothing was changed.`,
     });
+    return;
+  }
+  const partPath = joinContainerPath(info.container, info.part);
+  // Compared with the part as it is on disk now, not as the viewer read it.
+  let same: boolean;
+  try {
+    same = sameBytes((await wb.platform.readBinaryFile(partPath)).bytes, bytes);
+  } catch (error) {
+    wb.notify({ kind: "error", message: `Could not read ${info.name}: ${errorText(error)}` });
+    return;
+  }
+  if (same) {
+    // Rewriting the file for nothing would still change it on disk and take a backup.
+    wb.notify({ message: `That is the same picture as ${info.name}. Nothing was changed.` });
     return;
   }
   const choice = await wb.ask({
@@ -188,13 +243,13 @@ async function replacePicture(wb: Workbench, info: BinaryPartInfo): Promise<void
   });
   if (choice !== "replace") return;
   try {
-    await wb.platform.writeBinaryFile(joinContainerPath(info.container, info.part), bytes, {
-      overwrite: true,
-    });
+    await wb.platform.writeBinaryFile(partPath, bytes, { overwrite: true });
   } catch (error) {
     wb.notify({ kind: "error", message: `Could not replace ${info.name}: ${errorText(error)}` });
     return;
   }
+  // Not a document save, so nothing else hears of it through `onDidSave`.
+  for (const listener of [...replacedListeners]) listener(info.container);
   wb.notify({
     message: `Replaced ${info.name}. The Formatting view updates when the file reloads.`,
   });
@@ -252,7 +307,10 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
   }, [open]);
 
   useEffect(() => {
-    if (info) root.current?.querySelector<HTMLElement>("button")?.focus();
+    // Focus moves in when the dialog opens. When it shows a part again (after a replace) focus is
+    // already inside, on the button the person used, and stays there.
+    if (info && !root.current?.contains(document.activeElement))
+      root.current?.querySelector<HTMLElement>("button")?.focus();
   }, [info]);
 
   useEffect(() => {
