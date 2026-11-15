@@ -18,6 +18,7 @@ import { readOnly } from "./read-only";
 import { revealSourceFeature } from "./reveal-source";
 import { recovery } from "./recovery";
 import { ribbon } from "./ribbon";
+import { explain } from "./explain";
 import { integrity } from "./integrity";
 import { help } from "./help";
 import { images } from "./images";
@@ -55,6 +56,7 @@ export const defaultFeatures: readonly Feature[] = [
   outline,
   parts,
   integrity,
+  explain,
   revealSourceFeature,
   readOnly,
   // F6 and Shift+F6 cycle every visible pane (see pane-focus.ts).

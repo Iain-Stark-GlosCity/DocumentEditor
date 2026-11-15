@@ -6,6 +6,7 @@
  * under `src/formats/` that exports one of these.
  */
 import type { EditorState, Extension } from "@codemirror/state";
+import type { Explanation } from "./explain";
 import type { Finding } from "./findings";
 import type { SourceMapEntry } from "./source-map";
 import type { EditorView } from "@codemirror/view";
@@ -130,6 +131,14 @@ export interface BinaryView {
    * Read-only: it never changes the file. May throw if the file is damaged.
    */
   inspect?(bytes: Uint8Array, context: { path: string }): Promise<Finding[]>;
+  /**
+   * Explains the element a source map entry points at (`part` and `locator`): which layers decide
+   * how it looks. Returns null if the element is not something it can explain. Read-only.
+   */
+  explain?(
+    bytes: Uint8Array,
+    context: { path: string; part: string; locator: string },
+  ): Promise<Explanation | null>;
 }
 
 export interface EditorContext {

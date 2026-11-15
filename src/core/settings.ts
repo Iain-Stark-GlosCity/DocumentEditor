@@ -77,6 +77,8 @@ export const SETTINGS_SCHEMA = {
   "integrity.visible": bool(false),
   /** Check Word files in the background when they open, so the status bar can report. */
   "integrity.autoCheck": bool(true),
+  /** The Explain pane: why the paragraph at the cursor looks as it does. */
+  "explain.visible": bool(false),
   "ui.paneSizes": paneSizes(),
   /** The formatting ribbon between the menu bar and the tabs. */
   "ui.ribbon": bool(true),

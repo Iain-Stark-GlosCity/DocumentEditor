@@ -2,7 +2,10 @@
 
 Ordered by what to do next. Nothing here is started unless `STATUS.md` says so.
 
-## Next milestone (proposed, awaiting the user's go-ahead)
+## Current milestone (started 15 Nov 2026)
+
+Done so far: steps 1 and 2 below (resolver in `src/formats/docx/explain.ts`, Explain pane, Ctrl+Alt+E,
+via `BinaryView.explain`). Next: steps 3 to 5.
 
 **Effective paragraph formatting: "why does this paragraph look like that?"**
 

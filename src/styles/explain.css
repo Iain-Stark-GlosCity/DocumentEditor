@@ -1,0 +1,80 @@
+/* The Explain pane. Uncertainty is a word, never colour alone. */
+
+.explain-pane {
+  height: 100%;
+  overflow: auto;
+  padding: 8px 12px;
+  background: var(--bg-chrome);
+  font-size: 13px;
+}
+
+.explain-pane h2,
+.explain-pane h3 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+
+.explain-pane h3 {
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.explain-pane dl,
+.explain-pane dd,
+.explain-pane p,
+.explain-pane ul {
+  margin: 0;
+}
+
+.explain-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.explain-row dt {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.explain-value {
+  font-weight: 600;
+}
+
+.explain-source {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.explain-source:focus-visible {
+  outline: 2px solid var(--focus, currentColor);
+  outline-offset: 2px;
+}
+
+.explain-uncertain {
+  font-style: italic;
+}
+
+.explain-note,
+.explain-overridden,
+.explain-notes,
+.explain-empty {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.explain-notes {
+  padding-left: 18px;
+  margin-top: 10px;
+}
+
+@media (forced-colors: active) {
+  .explain-source {
+    color: LinkText;
+  }
+}

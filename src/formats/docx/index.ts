@@ -28,6 +28,10 @@ export const docxProvider: TextFormatProvider = {
       const { inspectDocxBytes } = await import("./inspect");
       return inspectDocxBytes(bytes, context);
     },
+    async explain(bytes, context) {
+      const { explainDocxBytes } = await import("./explain-bytes");
+      return explainDocxBytes(bytes, context);
+    },
   },
   // The view's headings are ATX Markdown on the same Lezer grammar, so the Markdown outline
   // reads them directly; HTML comments and inline tags are already skipped as markup there.

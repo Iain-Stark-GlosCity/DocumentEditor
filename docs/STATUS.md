@@ -18,6 +18,10 @@ Snapshot of where the project stands (15 Nov 2026). Update this file whenever a 
   CSV/TSV (column colours, table preview).
 - DOCX: read-only Formatting view, Parts pane, edit any XML part with a safe save (verified, backed
   up, atomic), Reveal in source XML, integrity inspector (about 60 rules, runs automatically).
+- Explain this paragraph (Ctrl+Alt+E): effective indent, spacing and alignment of the paragraph at
+  the cursor, the layer that decided each value, what it overrode, and a jump to that layer's XML.
+  Covers document defaults, list level, style chain and direct formatting; table styles and
+  character-unit indents are noted, not resolved. List-from-style precedence is flagged uncertain.
 - Find widget, command palette, autosave, crash recovery with format kept, external-change
   detection, themes, zen mode, spellcheck, word count, split-pane layouts.
 
