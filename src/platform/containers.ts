@@ -292,8 +292,15 @@ export class ContainerPlatform implements Platform {
     const provider = this.registry.forPath(path);
     if (provider?.binary) {
       const { bytes, modifiedMs } = await this.inner.readBinaryFile(path);
-      const text = await provider.binary.decode(bytes, { path });
-      return { text, format: { ...VIEW_FORMAT }, modifiedMs };
+      const decoded = await provider.binary.decode(bytes, { path });
+      const text = typeof decoded === "string" ? decoded : decoded.text;
+      const sourceMap = typeof decoded === "string" ? undefined : decoded.sourceMap;
+      return {
+        text,
+        format: { ...VIEW_FORMAT },
+        modifiedMs,
+        ...(sourceMap ? { sourceMap } : {}),
+      };
     }
     return this.inner.readFile(path);
   }

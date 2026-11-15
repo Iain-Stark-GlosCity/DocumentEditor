@@ -1,3 +1,4 @@
+import type { SourceMapEntry } from "../core/source-map";
 /**
  * Everything the app needs from the operating system. `TauriPlatform` implements it with Rust
  * commands; `MemoryPlatform` implements it in memory for tests and browser-only development.
@@ -33,6 +34,11 @@ export interface FileData {
   format: FileFormat;
   /** Last modified time in milliseconds since the epoch. Used to detect external changes. */
   modifiedMs: number;
+  /**
+   * For a generated view of a binary file: where each line came from (see src/core/source-map.ts).
+   * Absent for ordinary files.
+   */
+  sourceMap?: readonly SourceMapEntry[];
 }
 
 export interface FileFilter {

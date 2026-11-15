@@ -649,6 +649,20 @@ export class Workbench {
     await this.openPaths(paths);
   }
 
+  /**
+   * Opens `path` (for example a part of a container) and, when a `locator` is given and the file's
+   * format can read it (`TextFormatProvider.locate`), selects and scrolls to the element it names.
+   * Returns false if the file could not be opened.
+   *
+   * TODO(source mapping): for now this only opens the file; selecting the element is added with
+   * the source map work.
+   */
+  async revealPart(path: string, locator?: string): Promise<boolean> {
+    void locator;
+    await this.openPaths([path]);
+    return this.documents.getState().documents.some((d) => d.path === path);
+  }
+
   openPaths(paths: string[]): Promise<void> {
     const run = this.openPathsNow(paths).finally(() => this.opens.delete(run));
     this.opens.add(run);

@@ -6,6 +6,8 @@
  * under `src/formats/` that exports one of these.
  */
 import type { EditorState, Extension } from "@codemirror/state";
+import type { Finding } from "./findings";
+import type { SourceMapEntry } from "./source-map";
 import type { EditorView } from "@codemirror/view";
 
 /** How the editor presents the buffer. Providers declare which modes they support. */
@@ -56,6 +58,14 @@ export interface TextFormatProvider {
   /** CodeMirror extensions for this format in the given mode (language, keymaps, decorations). */
   editorExtensions(context: EditorContext): Extension[];
 
+  /**
+   * Finds an element by a locator from a source map or a finding (an element path such as
+   * `/w:document/w:body/w:p[12]`, names as written in the text, 1-based among same-named
+   * siblings) and returns its range in `text`, or null if it is not there (the text may have
+   * been edited or reformatted). Only formats that parts of a container open as need it.
+   */
+  locate?(text: string, locator: string): { from: number; to: number } | null;
+
   /** Render the text for the preview pane. Omit if the format has no preview. */
   render?(text: string, context: RenderContext): Promise<RenderResult>;
 
@@ -96,6 +106,12 @@ export interface TextFormatProvider {
   linkSyntax?(path: string, text: string): string;
 }
 
+/** A decoded view: the text, and optionally where its lines came from. */
+export interface DecodedView {
+  text: string;
+  sourceMap?: readonly SourceMapEntry[];
+}
+
 /** How a format that is a binary file on disk becomes text in the editor. */
 export interface BinaryView {
   /**
@@ -103,8 +119,17 @@ export interface BinaryView {
    * `src/core/container-path.ts`). It is what DOCX, ODT, XLSX, PPTX and EPUB are.
    */
   readonly archive?: "zip";
-  /** Turns the file's bytes into the text to show. May throw if the file is damaged. */
-  decode(bytes: Uint8Array, context: { path: string }): Promise<string>;
+  /**
+   * Turns the file's bytes into the text to show. May throw if the file is damaged. Returning an
+   * object also hands back a source map, which ties lines of the text to the parts and elements
+   * they came from.
+   */
+  decode(bytes: Uint8Array, context: { path: string }): Promise<string | DecodedView>;
+  /**
+   * Checks the file's structure and reports what is wrong or suspicious (see src/core/findings.ts).
+   * Read-only: it never changes the file. May throw if the file is damaged.
+   */
+  inspect?(bytes: Uint8Array, context: { path: string }): Promise<Finding[]>;
 }
 
 export interface EditorContext {

@@ -185,6 +185,24 @@ describe("reading", () => {
     expect((await memory.statFile(CONTAINER))?.modifiedMs).toBe(data.modifiedMs);
   });
 
+  it("hands back the source map when a view's decode provides one, and none when it does not", async () => {
+    const map = [
+      { fromLine: 1, toLine: 2, part: "word/document.xml", locator: "/w:document/w:body/w:p[1]" },
+    ];
+    const withMap: FormatProvider = {
+      ...fakeDocx,
+      binary: { archive: "zip", decode: async () => ({ text: "mapped view", sourceMap: map }) },
+    };
+    const registry = new FormatRegistry();
+    registry.register(withMap);
+    const mapped = new ContainerPlatform(memory, registry);
+    const data = await mapped.readFile(CONTAINER);
+    expect(data.text).toBe("mapped view");
+    expect(data.sourceMap).toEqual(map);
+    // A decode that returns plain text has no source map.
+    expect((await platform.readFile(CONTAINER)).sourceMap).toBeUndefined();
+  });
+
   it("forwards ordinary files and non-zip binary views", async () => {
     memory.seedFile("/demo/a.md", "# hi", LF);
     expect((await platform.readFile("/demo/a.md")).text).toBe("# hi");
