@@ -42,6 +42,43 @@ export function inCode(state: EditorState, pos: number, tree: Tree = treeOf(stat
   return !!inline && inline.from < pos && pos < inline.to;
 }
 
+/**
+ * Is `pos` in a fenced or indented code block, fences included? Both sides are probed so that a
+ * position at the very end of the document (an unclosed fence the user is still typing in, or an
+ * empty last line) still counts.
+ */
+export function inCodeBlock(tree: Tree, pos: number): boolean {
+  for (const side of [1, -1] as const) {
+    const block = findAncestor(tree.resolveInner(pos, side), CODE_BLOCKS);
+    if (block && block.from <= pos && pos <= block.to) return true;
+  }
+  return false;
+}
+
+/** Is `[from, to]` inside strictly the content of an inline code span (not around the span)? */
+export function inInlineCode(tree: Tree, from: number, to: number): boolean {
+  for (const [pos, side] of [
+    [from, 1],
+    [to, -1],
+  ] as const) {
+    const span = findAncestor(tree.resolveInner(pos, side), ["InlineCode"]);
+    if (span && span.from < from && to < span.to) return true;
+  }
+  return false;
+}
+
+/** Is `[from, to]` within a link, an image or a reference link (so a new link would nest)? */
+export function inLinkOrImage(tree: Tree, from: number, to: number): boolean {
+  for (const [pos, side] of [
+    [from, 1],
+    [to, -1],
+  ] as const) {
+    const node = findAncestor(tree.resolveInner(pos, side), ["Link", "Image"]);
+    if (node && node.from <= from && to <= node.to) return true;
+  }
+  return false;
+}
+
 /** Applies a transaction as its own undo step. */
 export function commit(target: Target, spec: TransactionSpec): true {
   target.dispatch(

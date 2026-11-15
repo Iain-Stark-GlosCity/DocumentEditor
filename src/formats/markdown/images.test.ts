@@ -15,6 +15,13 @@ describe("markdown image syntax", () => {
     expect(encodeDestination("./tab\there.png")).toBe("./tab%09here.png");
   });
 
+  it("encodes an ampersand only where it would start an entity", () => {
+    expect(encodeDestination("./a&copy;.png")).toBe("./a%26copy;.png");
+    expect(encodeDestination("./a&#169;b.png")).toBe("./a%26%23169;b.png");
+    expect(encodeDestination("./Q&A.png")).toBe("./Q&A.png");
+    expect(encodeDestination("./a&b;c.png")).toBe("./a%26b;c.png");
+  });
+
   it("leaves ordinary and non-ASCII characters readable", () => {
     expect(encodeDestination("./café/日本.png")).toBe("./café/日本.png");
     expect(encodeDestination("D:/Pictures/a-b_c.png")).toBe("D:/Pictures/a-b_c.png");

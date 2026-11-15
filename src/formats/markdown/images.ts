@@ -5,9 +5,10 @@
  * readable.
  */
 
-// Control characters are exactly what must be encoded in a link destination.
+// Control characters are exactly what must be encoded in a link destination. An ampersand is
+// encoded only where it would start an entity (`&copy;`, `&#169;`).
 // eslint-disable-next-line no-control-regex
-const UNSAFE_IN_DESTINATION = /[\s%()<>[\]#?"'`\\\u0000-\u001f\u007f]/g;
+const UNSAFE_IN_DESTINATION = /[\s%()<>[\]#?"'`\\\u0000-\u001f\u007f]|&(?=#?[a-z0-9]+;)/gi;
 
 export function encodeDestination(path: string): string {
   return path.replace(UNSAFE_IN_DESTINATION, (c) =>

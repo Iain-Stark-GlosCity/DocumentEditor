@@ -36,9 +36,17 @@ export interface CellRef {
 
 const NOT_TABLE_PARENTS = new Set(["FencedCode", "CodeBlock", "HTMLBlock", "CommentBlock"]);
 
+/** A list marker (`-`, `+`, `*`, `1.`, `1)`) at the start of a line's content. */
+const LIST_MARKER = /^(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$)/;
+
 function fromLines(state: EditorState, first: number, last: number): TableLoc | null {
   const lines: string[] = [];
   for (let n = first; n <= last; n++) lines.push(state.doc.line(n).text);
+  // A header that shares its line with a list marker (`- | a | b |`) would turn the marker into
+  // a cell, and the lines below it are indented to the item rather than to a quote. Leave those
+  // tables to be edited as text.
+  const head = lines[0] ?? "";
+  if (LIST_MARKER.test(head.slice(linePrefix(head).length))) return null;
   const model = parseTable(lines);
   if (!model) return null;
   return {

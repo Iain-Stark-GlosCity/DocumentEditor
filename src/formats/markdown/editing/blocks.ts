@@ -6,6 +6,7 @@ import { EditorSelection, type ChangeSpec, type EditorState } from "@codemirror/
 import {
   commit,
   findAncestor,
+  inCodeBlock,
   isBlank,
   parseLine,
   selectedLines,
@@ -17,8 +18,7 @@ import {
 const HEADING = /^(#{1,6})(?=[ \t]|$)[ \t]*/;
 
 function codeBlockAt(state: EditorState, pos: number): boolean {
-  const node = findAncestor(treeOf(state).resolveInner(pos, 1), ["FencedCode", "CodeBlock"]);
-  return node !== null;
+  return inCodeBlock(treeOf(state), pos);
 }
 
 /** The ATX level (1 to 6) of a line, or 0. Looks after any quote and list markers. */
@@ -171,8 +171,14 @@ export const toggleBlockquote: EditCommand = (target) => {
 
 type ListTarget = "bullet" | "ordered" | "task";
 
-function markerFor(kind: ListTarget, parsed: ParsedLine, number: number, bullet = "-"): string {
-  if (kind === "ordered") return `${number}${parsed.kind === "ordered" ? parsed.delimiter : "."} `;
+function markerFor(
+  kind: ListTarget,
+  parsed: ParsedLine,
+  number: number,
+  bullet = "-",
+  delimiter = ".",
+): string {
+  if (kind === "ordered") return `${number}${parsed.kind === "ordered" ? parsed.delimiter : delimiter} `;
   return kind === "task" ? `${bullet} [ ] ` : `${bullet} `;
 }
 
@@ -200,6 +206,8 @@ function toggleList(kind: ListTarget): EditCommand {
     const parsedLines = lines.map((l) => parseLine(l.text));
     const allSame = parsedLines.every((p) => p.kind === kind);
     const bullet = parsedLines.find((p) => p.bullet)?.bullet ?? "-";
+    // Lines that gain a number follow the delimiter of the first numbered line (`1)` or `1.`).
+    const delimiter = parsedLines.find((p) => p.kind === "ordered")?.delimiter ?? ".";
     const counters = new Map<number, number>();
     const changes: ChangeSpec[] = [];
     lines.forEach((line, i) => {
@@ -217,7 +225,7 @@ function toggleList(kind: ListTarget): EditCommand {
       // An existing marker is replaced; a plain line gets a marker after its indentation.
       const from = p.kind === "none" ? line.from + p.markerStart : replaceFrom;
       const to = p.kind === "none" ? from : replaceTo;
-      changes.push({ from, to, insert: allSame ? "" : markerFor(kind, p, number, bullet) });
+      changes.push({ from, to, insert: allSame ? "" : markerFor(kind, p, number, bullet, delimiter) });
     });
     return applyLineChanges(target, changes);
   };
@@ -230,6 +238,7 @@ export const toggleTaskList = toggleList("task");
 /** Flips `[ ]` and `[x]` on the task items under the cursors. Declines if there is none. */
 export const toggleTaskChecked: EditCommand = (target) => {
   const { state } = target;
+  const tree = treeOf(state);
   const seen = new Set<number>();
   const changes: ChangeSpec[] = [];
   for (const range of state.selection.ranges) {
@@ -239,6 +248,7 @@ export const toggleTaskChecked: EditCommand = (target) => {
       const line = state.doc.line(n);
       const p = parseLine(line.text);
       if (p.kind !== "task" && !(p.kind === "ordered" && p.boxStart >= 0)) continue;
+      if (inCodeBlock(tree, line.from + p.markerStart)) continue; // code that looks like a task
       changes.push({
         from: line.from + p.boxStart + 1,
         to: line.from + p.boxStart + 2,
@@ -252,10 +262,16 @@ export const toggleTaskChecked: EditCommand = (target) => {
 
 /** Is any line under the selection a task item? Decides whether Mod-Enter belongs to us. */
 export function selectionHasTask(state: EditorState): boolean {
+  const tree = treeOf(state);
   for (const range of state.selection.ranges) {
     for (let n = state.doc.lineAt(range.from).number; n <= state.doc.lineAt(range.to).number; n++) {
       const p = parseLine(state.doc.line(n).text);
-      if (p.kind === "task" || (p.kind === "ordered" && p.boxStart >= 0)) return true;
+      if (
+        (p.kind === "task" || (p.kind === "ordered" && p.boxStart >= 0)) &&
+        !inCodeBlock(tree, state.doc.line(n).from + p.markerStart)
+      ) {
+        return true;
+      }
     }
   }
   return false;
@@ -277,8 +293,11 @@ function fencedBlocksAt(state: EditorState): Map<number, ReturnType<typeof findA
   const blocks = new Map<number, ReturnType<typeof findAncestor>>();
   for (const range of state.selection.ranges) {
     for (const pos of [range.from, range.to]) {
-      const block = findAncestor(tree.resolveInner(pos, 1), ["FencedCode"]);
-      if (block) blocks.set(block.from, block);
+      // Both sides: the end of the document (an unclosed fence being typed) resolves only from the left.
+      for (const side of [1, -1] as const) {
+        const block = findAncestor(tree.resolveInner(pos, side), ["FencedCode"]);
+        if (block && block.from <= pos && pos <= block.to) blocks.set(block.from, block);
+      }
     }
   }
   return blocks;
@@ -346,7 +365,14 @@ export const toggleCodeBlock: EditCommand = (target) => {
 export const insertHorizontalRule: EditCommand = (target) => {
   const { state } = target;
   const { doc } = state;
-  const line = doc.lineAt(state.selection.main.to);
+  // Inside a code block the rule goes after the block: inside it, it would be part of the code.
+  const tree = treeOf(state);
+  const head = state.selection.main.to;
+  const block = inCodeBlock(tree, head)
+    ? (findAncestor(tree.resolveInner(head, 1), ["FencedCode", "CodeBlock"]) ??
+      findAncestor(tree.resolveInner(head, -1), ["FencedCode", "CodeBlock"]))
+    : null;
+  const line = doc.lineAt(block ? block.to : head);
   const blank = isBlank(line.text);
   const previousFilled = line.number > 1 && !isBlank(doc.line(line.number - 1).text);
   const lead = blank ? (previousFilled ? "\n" : "") : "\n\n";

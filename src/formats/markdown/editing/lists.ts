@@ -47,6 +47,34 @@ function markerColumn(state: EditorState, item: SyntaxNode): number {
   return (mark?.from ?? item.from) - state.doc.lineAt(item.from).from;
 }
 
+/**
+ * The list item before or after `item` in its list. Inside a block quote the `>` marks sit
+ * between the items as nodes of their own, so those are stepped over.
+ */
+function neighbourItem(item: SyntaxNode, direction: 1 | -1): SyntaxNode | null {
+  let node = direction < 0 ? item.prevSibling : item.nextSibling;
+  while (node && node.name === "QuoteMark") {
+    node = direction < 0 ? node.prevSibling : node.nextSibling;
+  }
+  return node && node.name === "ListItem" ? node : null;
+}
+
+/**
+ * The item a Tab would nest `item` under: the one before it in its own list or, for the first
+ * item of a list, the last item of a list of the other kind just above (`1. a` then `- b`).
+ */
+function itemAbove(item: SyntaxNode): SyntaxNode | null {
+  const prev = neighbourItem(item, -1);
+  if (prev) return prev;
+  const list = item.parent;
+  if (!list) return null;
+  let before = list.prevSibling;
+  while (before && before.name === "QuoteMark") before = before.prevSibling;
+  if (before?.name !== "BulletList" && before?.name !== "OrderedList") return null;
+  const items = before.getChildren("ListItem");
+  return items[items.length - 1] ?? null;
+}
+
 interface Context {
   /** The items to move, outermost only. */
   roots: SyntaxNode[];
@@ -89,7 +117,7 @@ function shiftItems(direction: 1 | -1): EditCommand {
       let amount: number;
       let newNumber: number | null = null;
       if (direction > 0) {
-        const prev = root.prevSibling;
+        const prev = itemAbove(root);
         amount = prev ? markerWidth(state, prev) : markerWidth(state, root);
         if (rootParsed.kind === "ordered" && prev) {
           const nested = prev.getChildren("OrderedList").pop();
@@ -158,8 +186,8 @@ function moveItem(direction: 1 | -1): EditCommand {
     const probe = tree.resolveInner(line.from + parseLine(line.text).markerStart, 1);
     const item = isBlank(line.text) ? null : listItemAt(probe);
     if (!item || range.to > item.to || findAncestor(probe, ["Table"])) return fallback(target);
-    const sibling = direction < 0 ? item.prevSibling : item.nextSibling;
-    if (!sibling || sibling.name !== "ListItem") return true;
+    const sibling = neighbourItem(item, direction);
+    if (!sibling) return true;
 
     const [a, b] = direction < 0 ? [sibling, item] : [item, sibling];
     const textA = state.sliceDoc(a.from, a.to);

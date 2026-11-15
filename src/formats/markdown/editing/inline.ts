@@ -8,6 +8,9 @@ import { ChangeSet, EditorSelection, type ChangeSpec, type EditorState } from "@
 import {
   commit,
   findAncestor,
+  inCodeBlock,
+  inInlineCode,
+  inLinkOrImage,
   isBlank,
   isUrl,
   linkDestination,
@@ -198,13 +201,20 @@ function toggleInline(spec: InlineSpec): EditCommand {
         }
         return { range, kind: "unwrap" as const };
       }
+      // Markup written into code would change the code itself, so leave it as it is.
+      if (inInlineCode(tree, from, to) || (range.empty && inCodeBlock(tree, range.head))) {
+        return { range, kind: "none" as const };
+      }
       if (range.empty && !wordAt) {
         const { open, close } =
           spec.node === "InlineCode" ? backtickFence("") : { open: spec.open, close: spec.close };
         add(`p${range.head}`, { kind: "pair", at: range.head, open, close });
         return { range, kind: "pair" as const, open };
       }
-      const segments = segmentsOf(state, from, to);
+      const lines = segmentsOf(state, from, to);
+      // Lines of a code block (fences included) are skipped; the rest of the selection is wrapped.
+      const segments = lines.filter((s) => !inCodeBlock(tree, s.from));
+      if (lines.length > 0 && segments.length === 0) return { range, kind: "none" as const };
       if (segments.length === 0) {
         add(`p${range.head}`, { kind: "pair", at: range.head, open: spec.open, close: spec.close });
         return { range, kind: "pair" as const, open: spec.open };
@@ -324,6 +334,16 @@ export const toggleLink: EditCommand = (target) => {
 
   for (const range of state.selection.ranges) {
     const link = enclosing(tree, "Link", range.from, range.to);
+    // A link in code is just text, and one in an image's alt text would nest.
+    if (
+      !link &&
+      (inInlineCode(tree, range.from, range.to) ||
+        inCodeBlock(tree, range.head) ||
+        inLinkOrImage(tree, range.from, range.to))
+    ) {
+      results.push({ unwrap: true, anchor: range.anchor, head: range.head });
+      continue;
+    }
     const marks = link?.getChildren("LinkMark") ?? [];
     const open = marks[0];
     const close = marks[1];

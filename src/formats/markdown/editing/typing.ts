@@ -13,6 +13,7 @@ import {
   commit,
   findAncestor,
   inCode,
+  inLinkOrImage,
   isUrl,
   linkDestination,
   treeOf,
@@ -194,6 +195,29 @@ export function enter(isOn: IsOn): EditCommand {
   };
 }
 
+/**
+ * Link text with its brackets in balance, or with every unescaped bracket escaped (which reads
+ * the same). Unbalanced brackets would end the link early, or leave it unclosed.
+ */
+function linkLabel(label: string): string {
+  let depth = 0;
+  let balanced = true;
+  for (let i = 0; i < label.length; i++) {
+    const ch = label.charAt(i);
+    if (ch === "\\") i++;
+    else if (ch === "[") depth++;
+    else if (ch === "]" && --depth < 0) balanced = false;
+  }
+  if (balanced && depth === 0) return label;
+  let out = "";
+  for (let i = 0; i < label.length; i++) {
+    const ch = label.charAt(i);
+    if (ch === "\\") out += ch + label.charAt(++i);
+    else out += ch === "[" || ch === "]" ? `\\${ch}` : ch;
+  }
+  return out;
+}
+
 /** Pasting a URL over selected text makes `[selection](url)`. */
 export function pasteUrl(view: EditorView, text: string): boolean {
   const url = text.trim();
@@ -201,7 +225,11 @@ export function pasteUrl(view: EditorView, text: string): boolean {
   if (!isUrl(url)) return false;
   const tree = treeOf(state);
   const wrappable = state.selection.ranges.filter(
-    (r) => !r.empty && !/\n/.test(state.sliceDoc(r.from, r.to)) && !inCode(state, r.from, tree),
+    (r) =>
+      !r.empty &&
+      !/\n/.test(state.sliceDoc(r.from, r.to)) &&
+      !inCode(state, r.from, tree) &&
+      !inLinkOrImage(tree, r.from, r.to),
   );
   if (wrappable.length === 0) return false;
   const destination = linkDestination(url);
@@ -213,7 +241,7 @@ export function pasteUrl(view: EditorView, text: string): boolean {
         range: EditorSelection.cursor(range.from + insert.length),
       };
     }
-    const label = state.sliceDoc(range.from, range.to);
+    const label = linkLabel(state.sliceDoc(range.from, range.to));
     const insert = `[${label}](${destination})`;
     return {
       changes: { from: range.from, to: range.to, insert },
