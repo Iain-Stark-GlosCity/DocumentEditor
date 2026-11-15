@@ -24,6 +24,7 @@ import {
 import type { ContainerPart } from "../../platform/platform";
 import type { Feature, FeatureComponentProps } from "../feature";
 import { useActiveDocument, useSetting } from "../hooks";
+import { showBinaryPart } from "./binary-part";
 import type { Workbench } from "../workbench";
 
 const TYPE_AHEAD_MS = 700;
@@ -210,9 +211,7 @@ function PartsPanel({ workbench, container }: FeatureComponentProps & { containe
       return;
     }
     if (row.part && !row.part.text) {
-      workbench.notify({
-        message: `${row.label} is a binary part and cannot be shown as text.`,
-      });
+      void showBinaryPart(workbench, container, row.path);
       return;
     }
     void workbench.openPaths([joinContainerPath(container, row.path)]);

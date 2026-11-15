@@ -32,7 +32,7 @@ build a synthetic fixture from.
 ## After that
 
 - Real-document testing round: fix inspector false positives found on user files.
-- Binary part preview and extract (images, fonts) in the Parts pane.
+- Done: binary part viewer (picture preview, Save a copy). Possible later: replace a picture, font preview.
 - More repairs, each narrow, previewed, verified and backed up.
 - Format candidates: ODT and EPUB reuse the container machinery; XLSX/PPTX read-only views;
   an editable grid for CSV as a pilot for a structured (non-text) provider kind.

@@ -45,7 +45,8 @@ Three integrity rules are flagged as uncertain until checked against real docume
 ## Known rough edges
 
 - Typing can lag on very long single lines (the XML/JSON Tidy offer mitigates it).
-- Binary parts (images, fonts) cannot be previewed or extracted yet.
+- Binary parts: pictures are previewed (up to 8 MB) and any binary part can be saved as a copy; fonts and
+  metafiles (EMF/WMF) are described but not previewed.
 - The render worker bundle includes every format's editor code.
 - Tab traps focus in code formats (Escape then Tab leaves the editor).
 - `text-stats` has a timing-based test (1 MB in 2 s) that can be flaky on slow machines.

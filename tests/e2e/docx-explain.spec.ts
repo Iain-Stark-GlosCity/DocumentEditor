@@ -1,5 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
-import { Document, Packer, Paragraph, TextRun } from "docx";
+import { Document, ImageRun, Packer, Paragraph, TextRun } from "docx";
 import type { Page } from "@playwright/test";
 import { documentText, expect, test } from "./fixtures";
 
@@ -112,4 +112,46 @@ test("the spacing repair removes the paragraph's own spacing as an undoable edit
   expect(await documentText(app)).toContain("<w:ind");
   await app.keyboard.press("Control+z");
   await expect.poll(() => documentText(app)).toContain("<w:spacing");
+});
+
+test("a picture inside a Word file can be previewed and saved as a copy", async ({ app }) => {
+  const png = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    ),
+    (c) => c.charCodeAt(0),
+  );
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [
+              new ImageRun({ type: "png", data: png, transformation: { width: 40, height: 40 } }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  await openDocx(app, "explain.docx", new Uint8Array(await Packer.toBuffer(doc)));
+
+  await app.getByRole("treeitem", { name: /^image1\.png/ }).click();
+  const dialog = app.getByRole("dialog", { name: "image1.png" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("PNG picture");
+  await expect(dialog.getByRole("img", { name: "Preview of image1.png" })).toBeVisible();
+
+  await app.evaluate(() => window.__demoPlatform?.queueSaveDialog("/demo/out/copy.png"));
+  await dialog.getByRole("button", { name: "Save a copy…" }).click();
+  await expect
+    .poll(() =>
+      app.evaluate(() =>
+        Array.from(window.__demoPlatform?.binaryFiles.get("/demo/out/copy.png") ?? []),
+      ),
+    )
+    .toEqual(Array.from(png));
+
+  await app.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 });

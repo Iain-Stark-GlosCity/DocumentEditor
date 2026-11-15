@@ -102,3 +102,33 @@
   outline: 2px solid var(--focus, currentColor);
   outline-offset: 2px;
 }
+
+/* The binary part viewer reuses the dialog styles. */
+.binary-part {
+  max-width: min(640px, 92vw);
+}
+
+.binary-part-meta {
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+}
+
+.binary-part-path {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.binary-part-preview {
+  max-height: 50vh;
+  margin-bottom: 12px;
+  overflow: auto;
+  text-align: center;
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+}
+
+.binary-part-preview img {
+  max-width: 100%;
+  height: auto;
+}

@@ -92,10 +92,11 @@ describe("the Parts pane", () => {
     expect(workbench.documents.getState().documents).toHaveLength(2);
   });
 
-  it("explains that a binary part cannot be shown as text, and opens nothing", async () => {
+  it("does not open a binary part as a text tab (it goes to the binary viewer instead)", async () => {
     const s = await ready();
     fireEvent.click(item(/image1\.png/));
-    expect(messages(s)).toContain("image1.png is a binary part and cannot be shown as text.");
+    // The test platform has no bytes for the part, so the viewer reports that it cannot read it.
+    await waitFor(() => expect(messages(s).join("\n")).toContain("Could not read image1.png"));
     expect(s.workbench.documents.getState().documents).toHaveLength(1);
   });
 
