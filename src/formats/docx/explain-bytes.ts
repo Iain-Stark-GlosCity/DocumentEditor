@@ -63,31 +63,14 @@ export async function explainDocxBytes(
   context: { path: string; part: string; locator: string },
 ): Promise<Explanation | null> {
   try {
-    const zip = readZip(bytes);
-    const names = zip.entries.filter((e) => !e.isDirectory).map((e) => e.name);
-    return explainParagraph(
-      {
-        names: () => names,
-        text(name) {
-          const info = zip.info(name);
-          if (!info || info.isDirectory) return undefined;
-          try {
-            return decodePart(zip.bytes(name));
-          } catch {
-            return undefined;
-          }
-        },
-      },
-      context.part,
-      context.locator,
-    );
+    if (!cached || !sameBytes(cached.bytes, bytes)) {
+      cached = null; // Never keep an entry that has been shown to differ.
+      cached = build(bytes);
+    }
+    return explainWith(cached.context, context.part, context.locator);
   } catch {
     // Bytes that are not a readable package explain nothing; never throw into the pane.
+    cached = null;
     return null;
   }
-  if (!cached || !sameBytes(cached.bytes, bytes)) {
-    cached = null; // Never keep an entry that has been shown to differ.
-    cached = build(bytes);
-  }
-  return explainWith(cached.context, context.part, context.locator);
 }

@@ -276,6 +276,9 @@ function styleNumbering(
     if (lvl !== undefined) ilvl = Number(lvl) || 0;
   }
   return numId === undefined ? undefined : { numId, ilvl };
+}
+
+/**
  * The style chain as layers, weakest first. A document has few styles and many paragraphs, so the
  * layers are built once per style and shared; they are never modified. Keyed on the `Styles`
  * object, so a different file (or a re-read of the same one) starts afresh.

@@ -70,7 +70,7 @@ describe("explainDocxBytes cache", () => {
 
   it("does not keep an entry for a file it could not read", async () => {
     await ask(docx("720"));
-    await expect(ask(new Uint8Array([1, 2, 3]))).rejects.toThrow();
+    await expect(ask(new Uint8Array([1, 2, 3]))).resolves.toBeNull();
     expect(leftIndent(await ask(docx("720")))).toBe("1.27 cm (36 pt)");
   });
 });
@@ -88,13 +88,13 @@ describe("callDocx explain without a Worker (the in-thread fallback)", () => {
     expect(explainCacheBuilds()).toBe(1);
   });
 
-  it("passes a damaged-file error through", async () => {
+  it("explains a damaged file as nothing, without throwing", async () => {
     await expect(
       callDocx("explain", new Uint8Array([1, 2, 3]), {
         path: "x.docx",
         part: PART,
         locator: LOCATOR,
       }),
-    ).rejects.toThrow();
+    ).resolves.toBeNull();
   });
 });
