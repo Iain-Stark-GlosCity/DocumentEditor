@@ -149,3 +149,22 @@ describe("locateElement", () => {
     expect(found(text, "/w:document/w:body/w:sectPr")).toBe("<w:sectPr/>");
   });
 });
+
+describe("locateElement in a damaged part", () => {
+  it("finds an element that is never closed, up to the end of the text", () => {
+    const damaged = "<w:hdr><w:p><w:r><w:t>x</w:t></w:r>\n</w:hdr>";
+    expect(found(damaged, "/w:hdr")).toBe(damaged);
+    expect(found(damaged, "/w:hdr/w:p")).toBe(damaged.slice(damaged.indexOf("<w:p>")));
+  });
+
+  it("still returns null for an element that is not there", () => {
+    expect(found("<a><b>", "/a/c")).toBeNull();
+    expect(found("<a><b></a>", "/a/b[2]")).toBeNull();
+    expect(found("<a><b/>", "/a/b[2]")).toBeNull();
+  });
+
+  it("does not let a comment or CDATA cut off at the end of the text hide a closed element", () => {
+    expect(found("<a><b/><!-- never closed", "/a/b")).toBe("<b/>");
+    expect(found("<a><b><![CDATA[ x", "/a/b")).toBe("<b><![CDATA[ x");
+  });
+});

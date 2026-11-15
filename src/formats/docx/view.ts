@@ -579,8 +579,13 @@ function notes(r: Renderer, pkg: Package, part: string, prefix: string, elName: 
       lines.push(errorPlaceholder(doc, note, error));
     }
   }
-  restore();
+  unclosedNote(lines, restore(), part);
   return lines;
+}
+
+/** Says so when a part ends with fields still open (the body says it in its own words). */
+function unclosedNote(lines: string[], count: number, part: string): void {
+  if (count > 0) lines.push(comment(`${count} field(s) are not closed by the end of ${part}`));
 }
 
 function errorFree(fn: () => string): string {
@@ -650,7 +655,7 @@ function comments(
       lines.push(errorPlaceholder(doc, c, error));
     }
   }
-  restore();
+  unclosedNote(lines, restore(), part);
   return lines;
 }
 
@@ -696,11 +701,13 @@ function headersFooters(
       ),
     );
     const restore = r.enter(part, doc, "header-footer");
+    let unclosed: number;
     try {
       lines.push(...r.blocks(doc.root));
     } finally {
-      restore();
+      unclosed = restore();
     }
+    unclosedNote(lines, unclosed, part);
   }
   return lines;
 }

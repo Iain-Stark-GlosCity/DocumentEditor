@@ -23,6 +23,9 @@ export function escapeText(text: string, inTable = false): string {
   // `#` where it could start a heading or close one.
   out = out.replace(/(^|\s)#/g, "$1\\#");
   if (inTable) out = out.replace(/\|/g, "\\|");
+  // Text from `w:t` is split at line breaks before it gets here; text from elsewhere (picture alt
+  // text, equations) may still hold one, and a paragraph is one line.
+  out = out.replace(/\r\n|[\r\n]/g, "<br/>");
   out = out.replace(INVISIBLE, (c) => {
     if (c === "\u00a0") return "<nbsp/>";
     if (c === "\u00ad") return "<shy/>";
@@ -31,10 +34,23 @@ export function escapeText(text: string, inTable = false): string {
   return out;
 }
 
+/**
+ * Controls that draw nothing but change how the text around them reads or is laid out: DEL and the
+ * C1 controls, the Arabic letter mark, the direction embeddings, overrides and isolates (which can
+ * reorder a whole line, notation included), the invisible maths operators and the interlinear
+ * annotation marks. Written as escapes for a character class.
+ */
+const CONTROLS =
+  "\\u007f-\\u009f\\u061c\\u180e\\u202a-\\u202e\\u2061-\\u2064\\u2066-\\u2069\\ufff9-\\ufffb";
+
 /** Characters that would be invisible or ambiguous: control characters, NBSP, zero widths. */
 // Control characters are exactly what must be found here.
-// eslint-disable-next-line no-control-regex
-const INVISIBLE = /[\u00a0\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff\u0000-\u0008\u000b-\u001f]/g;
+const INVISIBLE = new RegExp(
+  "[\\u00a0\\u00ad\\u200b-\\u200f\\u2028\\u2029\\u2060\\ufeff\\u0000-\\u0008\\u000b-\\u001f" +
+    CONTROLS +
+    "]",
+  "g",
+);
 
 /** Escapes what only matters at the start of a line: `>`, `-`, `+`, `=`, `1.`, `1)`. */
 export function escapeLineStart(text: string): string {
@@ -72,7 +88,7 @@ export function commentAttrs(attrs: readonly Attr[]): string {
 
 /** Keeps a value on one line and from ending an HTML comment or a tag. */
 function cleanValue(value: string): string {
-  return value
+  return showControls(value)
     .replace(/\s*[\r\n]+\s*/g, " ")
     .replace(/--/g, "-\u2010")
     .replace(/>/g, "&gt;");
@@ -80,7 +96,28 @@ function cleanValue(value: string): string {
 
 /** An HTML comment that is safe to emit: one line, and `--` never closes it early. */
 export function comment(body: string): string {
-  return `<!-- ${body.replace(/\s*[\r\n]+\s*/g, " ").replace(/--/g, "-\u2010")} -->`;
+  return `<!-- ${showControls(body)
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .replace(/--/g, "-\u2010")} -->`;
+}
+
+/**
+ * Where a value cannot hold a `<char/>` token (a tag attribute, a comment), the controls that
+ * would reorder or hide text are written by code, as the Lists section writes a symbol bullet:
+ * `U+202E`.
+ */
+const CONTROL_CHARS = new RegExp(
+  "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u200b-\\u200f\\u2028\\u2029\\u2060\\ufeff" +
+    CONTROLS +
+    "]",
+  "g",
+);
+
+function showControls(value: string): string {
+  return value.replace(
+    CONTROL_CHARS,
+    (c) => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
+  );
 }
 
 export function tag(name: string, attrs: readonly Attr[] = [], selfClosing = false): string {
