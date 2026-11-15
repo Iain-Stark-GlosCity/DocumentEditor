@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 import { buildAnnotations } from "./annotations";
 import { decodePart } from "./decode";
+import type { DecodedView } from "../../core/format";
 import { docxProvider } from "./index";
 
 // The real zip reader is another piece of work; a Map stands in for an archive. The fake's
@@ -69,7 +70,9 @@ describe("docxProvider", () => {
     const bytes = zip({
       "word/document.xml": `<w:document ${W}><w:body><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Hello</w:t></w:r></w:p></w:body></w:document>`,
     });
-    const text = await docxProvider.binary!.decode(bytes, { path: "C:\\a.docx" });
+    const { text } = (await docxProvider.binary!.decode(bytes, {
+      path: "C:\\a.docx",
+    })) as DecodedView;
     expect(text).toContain("\n**Hello**\n");
   });
 
@@ -81,9 +84,9 @@ describe("docxProvider", () => {
         ...`<w:document ${W}><w:body><w:p><w:r><w:t>Wide é</w:t></w:r></w:p></w:body></w:document>`,
       ].flatMap((c) => [c.charCodeAt(0) & 0xff, c.charCodeAt(0) >> 8]),
     ];
-    const text = await docxProvider.binary!.decode(zip({ "word/document.xml": utf16 }), {
+    const { text } = (await docxProvider.binary!.decode(zip({ "word/document.xml": utf16 }), {
       path: "a.docx",
-    });
+    })) as DecodedView;
     expect(text).toContain("\nWide é\n");
     expect(decodePart(Uint8Array.from([0xef, 0xbb, 0xbf, 0x41]))).toBe("A");
     expect(decodePart(Uint8Array.from([0xfe, 0xff, 0, 0x41]))).toBe("A");

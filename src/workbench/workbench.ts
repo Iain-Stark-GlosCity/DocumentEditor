@@ -7,6 +7,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { editorHighlighting } from "./editor-highlight";
 import {
   Compartment,
+  EditorSelection,
   EditorState,
   type Extension,
   type StateEffect,
@@ -652,15 +653,84 @@ export class Workbench {
   /**
    * Opens `path` (for example a part of a container) and, when a `locator` is given and the file's
    * format can read it (`TextFormatProvider.locate`), selects and scrolls to the element it names.
-   * Returns false if the file could not be opened.
-   *
-   * TODO(source mapping): for now this only opens the file; selecting the element is added with
-   * the source map work.
+   * An already open tab is reused. If the element cannot be found any more (the part was edited)
+   * the file is still opened and a short notification says so.
+   * Returns false only if the file could not be opened (which is notified).
    */
   async revealPart(path: string, locator?: string): Promise<boolean> {
-    void locator;
-    await this.openPaths([path]);
-    return this.documents.getState().documents.some((d) => d.path === path);
+    const find = () => {
+      const lower = path.toLowerCase();
+      return this.documents.getState().documents.find((d) => d.path?.toLowerCase() === lower);
+    };
+    let doc = find();
+    if (doc) this.documents.getState().setActive(doc.id);
+    else {
+      await this.openPaths([path]);
+      doc = find();
+      if (!doc) return false;
+      this.documents.getState().setActive(doc.id);
+    }
+    if (locator === undefined) {
+      this.focusEditor();
+      return true;
+    }
+    const id = doc.id;
+    // React mounts the editor after the tab is activated, so wait for it to show this document.
+    const view = await this.whenEditorShows(id);
+    if (!this.docById(id)) return true; // Closed while waiting.
+    const text = view ? view.state.doc.toString() : this.getText(id);
+    const provider = this.registry.byId(doc.providerId);
+    let range: { from: number; to: number } | null;
+    try {
+      range = text !== undefined ? (provider?.locate?.(text, locator) ?? null) : null;
+    } catch {
+      range = null;
+    }
+    if (!range) {
+      this.notify({
+        kind: "warning",
+        message: `Could not find that element in ${doc.title} any more. The part may have been edited since the view was made.`,
+      });
+      view?.focus();
+      return true;
+    }
+    const selection = EditorSelection.range(range.from, range.to);
+    if (view) {
+      view.dispatch({
+        selection,
+        effects: EditorView.scrollIntoView(selection, { y: "center" }),
+        userEvent: "select.reveal",
+      });
+      view.focus();
+    } else {
+      // The editor never appeared (no view in this host): leave the selection in the stored state.
+      const state = this.getEditorState(id);
+      if (state) this.buffers.set(id, state.update({ selection }).state);
+    }
+    return true;
+  }
+
+  /**
+   * How `revealPart` waits for the editor to show a document: it calls this once per frame, for
+   * at most `viewWaitMs`. Tests replace both to run without a real display.
+   */
+  nextFrame: (callback: () => void) => void = (callback) =>
+    typeof requestAnimationFrame === "function"
+      ? void requestAnimationFrame(() => callback())
+      : void setTimeout(callback, 16);
+  viewWaitMs = 1000;
+
+  /** Resolves with the editor view once it is showing the document, or null after `viewWaitMs`. */
+  private whenEditorShows(id: string): Promise<EditorView | null> {
+    const started = Date.now();
+    return new Promise((resolve) => {
+      const check = () => {
+        if (this.view && this.shownId === id) resolve(this.view);
+        else if (Date.now() - started >= this.viewWaitMs) resolve(null);
+        else this.nextFrame(check);
+      };
+      check();
+    });
   }
 
   openPaths(paths: string[]): Promise<void> {

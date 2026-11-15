@@ -16,6 +16,8 @@ import {
   type PropContext,
 } from "./props";
 import { Renderer } from "./render";
+import type { SourceMapEntry } from "../../core/source-map";
+import { SourceMarks } from "./source-marks";
 import { asContainer, Styles } from "./styles";
 import { child, elements, localName, textOf, type XDocument, type XElement } from "./xml";
 
@@ -51,13 +53,31 @@ function banner(title: string): string {
   return `<!-- ==== ${title} ==== -->`;
 }
 
+/** The Formatting view as text. */
 export function generateDocxView(source: PartSource, options: DocxViewOptions = {}): string {
+  return generateDocxViewMapped(source, options).text;
+}
+
+export interface MappedDocxView {
+  text: string;
+  /** Which lines of `text` came from which element of which part (see `src/core/source-map.ts`). */
+  sourceMap: SourceMapEntry[];
+}
+
+/** The Formatting view with a source map: the lines of each paragraph, table, note and so on. */
+export function generateDocxViewMapped(
+  source: PartSource,
+  options: DocxViewOptions = {},
+): MappedDocxView {
+  const unmapped = (text: string): MappedDocxView => ({ text, sourceMap: [] });
   const out: string[] = [...LEGEND];
   let pkg: Package;
   try {
     pkg = new Package(source);
   } catch (error) {
-    return [...out, "", comment(`error reading the package: ${String(error)}`)].join("\n") + "\n";
+    return unmapped(
+      [...out, "", comment(`error reading the package: ${String(error)}`)].join("\n") + "\n",
+    );
   }
   const main = pkg.mainPart;
   const mainText = safe(() => source.text(main));
@@ -67,7 +87,7 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
       "",
       comment(`This file has no main document part (${main}), so there is nothing to show.`),
     );
-    return out.join("\n") + "\n";
+    return unmapped(out.join("\n") + "\n");
   }
   if (mainText.length > limit) {
     out.push(
@@ -76,7 +96,7 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
         `The main document part (${main}) is ${(mainText.length / 1048576).toFixed(1)} MB, more than the ${(limit / 1048576).toFixed(0)} MB the Formatting view reads. Open its parts one by one in the Parts pane instead.`,
       ),
     );
-    return out.join("\n") + "\n";
+    return unmapped(out.join("\n") + "\n");
   }
 
   const styles =
@@ -114,8 +134,9 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
     out.push(lines.join("\n\n"));
   };
 
-  section(null, () => properties(pkg, shown));
-  section(null, () => settings(pkg, main, shown, props));
+  const marks = r.marks;
+  section(null, () => properties(pkg, shown, marks));
+  section(null, () => settings(pkg, main, shown, props, marks));
 
   // ---- body ----
   const doc = pkg.xml(main)!;
@@ -161,7 +182,9 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
     let started = false;
     for (const el of blocks) {
       if (!started) {
-        lines.push(sectionLine(sections[index]?.sectPr, index, sections.length, pkg, main, props));
+        lines.push(
+          sectionLine(sections[index]?.sectPr, index, sections.length, pkg, main, props, marks),
+        );
         started = true;
       }
       try {
@@ -176,7 +199,9 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
       }
     }
     if (!started && index < sections.length)
-      lines.push(sectionLine(sections[index]?.sectPr, index, sections.length, pkg, main, props));
+      lines.push(
+        sectionLine(sections[index]?.sectPr, index, sections.length, pkg, main, props, marks),
+      );
     if (r.unclosedFields())
       lines.push(
         comment(`${r.unclosedFields()} field(s) are not closed by the end of the document`),
@@ -205,10 +230,14 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
   // ---- definitions ----
   const stylesPart = pkg.related(main, "styles");
   if (stylesPart) shown.add(stylesPart);
-  section("Styles", () => stylesAppendix(styles, r.usedStyles, props));
+  section("Styles", () =>
+    stylesAppendix(styles, r.usedStyles, props, marks, stylesPart ?? "word/styles.xml"),
+  );
   const numberingPart = pkg.related(main, "numbering");
   if (numberingPart) shown.add(numberingPart);
-  section("Lists", () => listsAppendix(numbering, props));
+  section("Lists", () =>
+    listsAppendix(numbering, props, marks, numberingPart ?? "word/numbering.xml"),
+  );
 
   section("Other parts", () => {
     const theme = pkg.related(main, "theme");
@@ -233,7 +262,7 @@ export function generateDocxView(source: PartSource, options: DocxViewOptions = 
       );
     return lines;
   });
-  return out.join("\n") + "\n";
+  return marks.finish(out.join("\n") + "\n");
 }
 
 /** Private-use characters (Symbol and Wingdings bullets) as `U+F0B7`. */
@@ -256,7 +285,7 @@ function safe<T>(fn: () => T): T | undefined {
 
 /* ---------------- properties and settings ---------------- */
 
-function properties(pkg: Package, shown: Set<string>): string[] {
+function properties(pkg: Package, shown: Set<string>, marks: SourceMarks): string[] {
   const lines: string[] = [];
   const simple = (part: string, label: string) => {
     const root = pkg.xml(part)?.root;
@@ -276,7 +305,8 @@ function properties(pkg: Package, shown: Set<string>): string[] {
         attrs.push([kebab(localName(el.name)), values.join(" | ")]);
       }
     }
-    if (attrs.length) lines.push(comment(`${label} ${commentAttrs(attrs)}`));
+    if (attrs.length)
+      lines.push(marks.wrap(part, root, comment(`${label} ${commentAttrs(attrs)}`), label));
   };
   simple("docProps/core.xml", "properties");
   simple("docProps/app.xml", "application");
@@ -284,7 +314,15 @@ function properties(pkg: Package, shown: Set<string>): string[] {
   if (custom) {
     shown.add("docProps/custom.xml");
     const attrs: Attr[] = elements(custom).map((p) => [p.attrs.name ?? "?", textOf(p).trim()]);
-    if (attrs.length) lines.push(comment(`custom-properties ${commentAttrs(attrs)}`));
+    if (attrs.length)
+      lines.push(
+        marks.wrap(
+          "docProps/custom.xml",
+          custom,
+          comment(`custom-properties ${commentAttrs(attrs)}`),
+          "custom properties",
+        ),
+      );
   }
   return lines;
 }
@@ -310,7 +348,13 @@ const SETTING_NAMES: Record<string, string> = {
   "w:linkStyles": "link-styles",
 };
 
-function settings(pkg: Package, main: string, shown: Set<string>, props: PropContext): string[] {
+function settings(
+  pkg: Package,
+  main: string,
+  shown: Set<string>,
+  props: PropContext,
+  marks: SourceMarks,
+): string[] {
   const part = pkg.related(main, "settings") ?? "word/settings.xml";
   const root = pkg.xml(part)?.root;
   if (!root) return [];
@@ -359,7 +403,7 @@ function settings(pkg: Package, main: string, shown: Set<string>, props: PropCon
     else other.push(el.name);
   }
   void props;
-  const lines = [comment(`settings ${commentAttrs(attrs)}`)];
+  const lines = [marks.wrap(part, root, comment(`settings ${commentAttrs(attrs)}`), "settings")];
   if (other.length)
     lines.push(comment(`other settings (no effect on content): ${[...new Set(other)].join(" ")}`));
   return lines;
@@ -374,10 +418,16 @@ function sectionLine(
   pkg: Package,
   main: string,
   props: PropContext,
+  marks: SourceMarks,
 ): string {
   const head = `section ${index + 1} of ${count}`;
   if (!sectPr) return comment(`${head}: no section properties, so Word's defaults apply`);
-  return comment(`${head} ${commentAttrs(sectionAttrs(sectPr, pkg, main, props))}`);
+  return marks.wrap(
+    main,
+    sectPr,
+    comment(`${head} ${commentAttrs(sectionAttrs(sectPr, pkg, main, props))}`),
+    `section ${index + 1}`,
+  );
 }
 
 export function sectionAttrs(
@@ -504,14 +554,27 @@ function notes(r: Renderer, pkg: Package, part: string, prefix: string, elName: 
       const blocks = r.blocks(note);
       if (type && type !== "normal")
         lines.push(
-          [
-            comment(
-              `${elName === "w:footnote" ? "footnote" : "endnote"} ${id} type=${type} (Word's separator line, not a note)`,
-            ),
-            ...blocks,
-          ].join("\n"),
+          r.marks.wrap(
+            part,
+            note,
+            [
+              comment(
+                `${elName === "w:footnote" ? "footnote" : "endnote"} ${id} type=${type} (Word's separator line, not a note)`,
+              ),
+              ...blocks,
+            ].join("\n"),
+            `${elName === "w:footnote" ? "footnote" : "endnote"} ${id}`,
+          ),
         );
-      else lines.push(indentBlocks(blocks.length ? blocks : [""], `[^${prefix}${id}]: `));
+      else
+        lines.push(
+          r.marks.wrap(
+            part,
+            note,
+            indentBlocks(blocks.length ? blocks : [""], `[^${prefix}${id}]: `),
+            `${elName === "w:footnote" ? "footnote" : "endnote"} ${id}`,
+          ),
+        );
     } catch (error) {
       lines.push(errorPlaceholder(doc, note, error));
     }
@@ -575,7 +638,14 @@ function comments(
     if (anchor !== undefined)
       attrs.push(["on", anchor.length > 120 ? anchor.slice(0, 120) + "…" : anchor]);
     try {
-      lines.push([comment(`comment ${commentAttrs(attrs)}`), ...r.blocks(c)].join("\n\n"));
+      lines.push(
+        r.marks.wrap(
+          part,
+          c,
+          [comment(`comment ${commentAttrs(attrs)}`), ...r.blocks(c)].join("\n\n"),
+          `comment ${id}`,
+        ),
+      );
     } catch (error) {
       lines.push(errorPlaceholder(doc, c, error));
     }
@@ -612,11 +682,19 @@ function headersFooters(
   for (const [part, used] of uses) {
     shown.add(part);
     const doc = pkg.xml(part);
-    lines.push(comment(`${part}: ${used.join(", ")}`));
     if (!doc?.root) {
+      lines.push(comment(`${part}: ${used.join(", ")}`));
       lines.push(comment(`${part} is missing or holds no XML`));
       continue;
     }
+    lines.push(
+      r.marks.wrap(
+        part,
+        doc.root,
+        comment(`${part}: ${used.join(", ")}`),
+        part.includes("footer") ? "footer" : "header",
+      ),
+    );
     const restore = r.enter(part, doc, "header-footer");
     try {
       lines.push(...r.blocks(doc.root));
@@ -629,7 +707,13 @@ function headersFooters(
 
 /* ---------------- styles and lists ---------------- */
 
-function stylesAppendix(styles: Styles, used: Set<string>, props: PropContext): string[] {
+function stylesAppendix(
+  styles: Styles,
+  used: Set<string>,
+  props: PropContext,
+  marks: SourceMarks,
+  part: string,
+): string[] {
   const include = new Set<string>();
   const add = (id: string | undefined) => {
     if (id === undefined || include.has(id) || !styles.byId.has(id)) return;
@@ -697,7 +781,7 @@ function stylesAppendix(styles: Styles, used: Set<string>, props: PropContext): 
         ),
       );
     }
-    lines.push(block.join("\n"));
+    lines.push(marks.wrap(part, def.el, block.join("\n"), `style ${def.name}`));
   }
   if (styles.latentCount)
     lines.push(
@@ -754,7 +838,12 @@ function describeResolved(styles: Styles, id: string, type: string, props: PropC
   return groups.join(" | ");
 }
 
-function listsAppendix(numbering: Numbering, props: PropContext): string[] {
+function listsAppendix(
+  numbering: Numbering,
+  props: PropContext,
+  marks: SourceMarks,
+  part: string,
+): string[] {
   const lines: string[] = [];
   for (const numId of numbering.used) {
     const num = numbering.nums.get(numId);
@@ -797,7 +886,7 @@ function listsAppendix(numbering: Numbering, props: PropContext): string[] {
       }
       block.push(comment(`  level ${ilvl + 1} ${commentAttrs(attrs)}`));
     }
-    lines.push(block.join("\n"));
+    lines.push(marks.wrap(part, num.el, block.join("\n"), `list ${numId}`));
   }
   return lines;
 }

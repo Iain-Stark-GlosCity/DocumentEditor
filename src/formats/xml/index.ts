@@ -5,6 +5,7 @@ import { problemChecking } from "../../core/problems";
 import { dataEditing } from "../shared/data-editing";
 import { lazyLanguage } from "../shared/lazy-language";
 import { isWellFormed, xmlDiagnostics } from "./lint";
+import { locateElement } from "./locate";
 import { applyChanges, tidyChanges, type TextChange } from "./tidy";
 import { xmlToolbar } from "./toolbar";
 
@@ -63,6 +64,7 @@ export const xmlProvider: TextFormatProvider = {
   // Word writes document.xml as one line of a megabyte or more.
   longLineCommand: "xml.format",
   toolbar: xmlToolbar,
+  locate: locateElement,
   editorExtensions(context) {
     const indent = () => Math.round(context.setting("xml.indent", 2));
     return [

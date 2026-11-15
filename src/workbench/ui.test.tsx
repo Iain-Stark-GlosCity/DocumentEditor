@@ -85,6 +85,7 @@ describe("menu bar", () => {
       "Typewriter mode",
       "Focus mode",
       "Zen modeCtrl+Alt+Z",
+      "Reveal in source XMLCtrl+Alt+X",
       "ProblemsCtrl+Shift+M",
       "Go to next problemF8",
       "Go to previous problemShift+F8",
