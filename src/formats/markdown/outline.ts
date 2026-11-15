@@ -41,7 +41,33 @@ const MARKUP = new Set([
   "Comment",
   "ProcessingInstruction",
   "StrikethroughMark",
+  // The `>` of the later lines of a setext heading inside a block quote.
+  "QuoteMark",
 ]);
+
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+  copy: "\u00a9",
+  reg: "\u00ae",
+  hellip: "\u2026",
+  mdash: "\u2014",
+  ndash: "\u2013",
+};
+
+/** The character an entity such as `&amp;` or `&#169;` stands for; unknown names stay as written. */
+function decodeEntity(entity: string): string {
+  const numeric = /^&#(?:x([0-9a-f]+)|([0-9]+));$/i.exec(entity);
+  if (numeric) {
+    const code = numeric[1] !== undefined ? parseInt(numeric[1], 16) : Number(numeric[2]);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd";
+  }
+  return NAMED_ENTITIES[entity.slice(1, -1)] ?? entity;
+}
 
 /**
  * End offset of a YAML front matter block at the start of the document, or 0. The Markdown
@@ -61,8 +87,11 @@ export function frontMatterEnd(doc: Text): number {
 function headingText(doc: Text, heading: SyntaxNode): string {
   let out = "";
   let pos = heading.from;
+  // Text between nodes. After a line break, quote marks (`> `) are the container's, not the text's.
+  const raw = (from: number, to: number) =>
+    doc.sliceString(from, to).replace(/\n[ \t]*(?:>[ \t]*)+/g, "\n");
   const skip = (from: number, to: number) => {
-    if (from > pos) out += doc.sliceString(pos, from);
+    if (from > pos) out += raw(pos, from);
     pos = Math.max(pos, to);
   };
   const walk = (parent: SyntaxNode) => {
@@ -70,11 +99,16 @@ function headingText(doc: Text, heading: SyntaxNode): string {
       if (MARKUP.has(node.name)) skip(node.from, node.to);
       else if (node.name === "URL" && parent.name !== "Autolink") skip(node.from, node.to);
       else if (node.name === "Escape") skip(node.from, node.from + 1);
+      else if (node.name === "Entity") {
+        if (node.from > pos) out += raw(pos, node.from);
+        out += decodeEntity(doc.sliceString(node.from, node.to));
+        pos = Math.max(pos, node.to);
+      }
       else walk(node);
     }
   };
   walk(heading);
-  if (heading.to > pos) out += doc.sliceString(pos, heading.to);
+  if (heading.to > pos) out += raw(pos, heading.to);
   return out.replace(/\s+/g, " ").trim();
 }
 

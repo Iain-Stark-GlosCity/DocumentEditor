@@ -30,6 +30,7 @@ import {
 import {
   rehypeFragmentLinks,
   rehypeResolveAssets,
+  rehypeStripAuthoredAssets,
   sanitiseSchema,
   walkElements,
   type FileData,
@@ -273,6 +274,7 @@ function build() {
     .use(parseDocument)
     .use(rehypeBodyOnly)
     .use(rehypeBlockLines)
+    .use(rehypeStripAuthoredAssets)
     .use(resolveAssets)
     .use(rehypeFragmentLinks)
     .use(restrictDataImages)

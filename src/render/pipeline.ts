@@ -131,6 +131,24 @@ function rehypeDataLines() {
   };
 }
 
+/**
+ * `asset:` is how the render worker names a local file (see `workbench/preview/paths.ts`); the
+ * main thread turns such an address into a real file URL. Only `rehypeResolveAssets` may write
+ * one, so an `asset:` address the author wrote is removed first. Browsers ignore leading control
+ * characters and spaces in a URL, so those are looked past here too.
+ */
+export function rehypeStripAuthoredAssets() {
+  return (tree: HastRoot) => {
+    walkElements(tree, (element) => {
+      const src = element.properties["src"];
+      // eslint-disable-next-line no-control-regex -- matching the control characters browsers skip
+      if (typeof src === "string" && /^[\u0000-\u0020]*asset:/i.test(src)) {
+        delete element.properties["src"];
+      }
+    });
+  };
+}
+
 /** Send relative image sources through `resolveAsset`. Links are left as written. */
 export function rehypeResolveAssets() {
   return (tree: HastRoot, file: { data: FileData }) => {
@@ -255,6 +273,7 @@ function build(options: PipelineOptions): Processor {
   processor.use(rehypeRaw);
   processor.use(rehypeRestoreCodeNewline);
   if (dataLines) processor.use(rehypeDataLines);
+  processor.use(rehypeStripAuthoredAssets);
   if (resolveAssets) processor.use(rehypeResolveAssets);
   if (gfm) processor.use(rehypeTaskListClasses, { keep: taskListClasses });
   if (headingIds) processor.use(rehypeHeadingIds);

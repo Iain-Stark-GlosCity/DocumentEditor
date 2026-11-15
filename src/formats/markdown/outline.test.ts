@@ -83,3 +83,20 @@ describe("outlineFromState", () => {
     expect(items).toHaveLength(count);
   }, 30_000);
 });
+
+describe("outlineFromState heading text", () => {
+  it("leaves the block quote marks out of a multi-line setext heading", () => {
+    const [item] = outline("> Line one\n> Line two\n> ---\n");
+    expect(item?.text).toBe("Line one Line two");
+  });
+
+  it("leaves list marks out of a setext heading inside a list item", () => {
+    const [item] = outline("- Line one\n  Line two\n  ---\n");
+    expect(item?.text).toBe("Line one Line two");
+  });
+
+  it("shows entities as the characters they stand for", () => {
+    const [item] = outline("# Fish &amp; chips &lt;3 &#169; &#x1F600; &unknown;");
+    expect(item?.text).toBe("Fish & chips <3 © \u{1F600} &unknown;");
+  });
+});
