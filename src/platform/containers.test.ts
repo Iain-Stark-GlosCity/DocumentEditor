@@ -265,6 +265,97 @@ describe("watching", () => {
   });
 });
 
+describe("rewriting several parts in one save", () => {
+  const DOC2 = `<w:document xmlns:w="urn:w"><w:body>Second</w:body></w:document>`;
+  const STYLES2 = `<styles>\n  <style id='b'/>\n</styles>`;
+
+  it("changes exactly those parts in one write, keeping every other entry byte for byte", async () => {
+    const before = disk();
+    await platform.containers?.replaceParts(CONTAINER, [
+      { part: "word/document.xml", text: DOC2 },
+      { part: "word/styles.xml", text: STYLES2 },
+    ]);
+    const now = readZip(disk());
+    const old = readZip(before);
+    expect(dec(now.bytes("word/document.xml"))).toBe(DOC2);
+    expect(dec(now.bytes("word/styles.xml"))).toBe(STYLES2);
+    for (const entry of old.entries) {
+      if (entry.isDirectory || ["word/document.xml", "word/styles.xml"].includes(entry.name))
+        continue;
+      expect(now.bytes(entry.name)).toEqual(old.bytes(entry.name));
+    }
+    expect(disk(`${CONTAINER}.bak`)).toEqual(before);
+  });
+
+  it("keeps each part's own line endings and BOM", async () => {
+    setup(docx({ "word/styles.xml": "\ufeff<styles>\r\n</styles>" }));
+    await platform.containers?.replaceParts(CONTAINER, [
+      { part: "word/styles.xml", text: "<styles>\r\n  <a/>\r\n</styles>" },
+    ]);
+    const bytes = readZip(disk()).bytes("word/styles.xml");
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+    expect(dec(bytes.slice(3))).toBe("<styles>\r\n  <a/>\r\n</styles>");
+  });
+
+  it("writes nothing if any part is refused (ill-formed XML, a missing part, a binary part, a duplicate)", async () => {
+    const before = disk();
+    const attempts = [
+      [
+        { part: "word/document.xml", text: DOC2 },
+        { part: "word/styles.xml", text: "<a><b></a>" },
+      ],
+      [
+        { part: "word/document.xml", text: DOC2 },
+        { part: "word/nope.xml", text: "<a/>" },
+      ],
+      [
+        { part: "word/document.xml", text: DOC2 },
+        { part: "word/media/image1.png", text: "x" },
+      ],
+      [
+        { part: "word/document.xml", text: DOC2 },
+        { part: "word/document.xml", text: DOC2 },
+      ],
+    ];
+    for (const edits of attempts) {
+      await expect(platform.containers?.replaceParts(CONTAINER, edits)).rejects.toThrow();
+      expect(disk()).toEqual(before);
+    }
+    expect(memory.binaryFiles.has(`${CONTAINER}.bak`)).toBe(false);
+  });
+
+  it("refuses when the file is not the one the edits were worked out from", async () => {
+    const basis = disk();
+    // Another program changes a part after the edits were prepared.
+    memory.seedBinary(
+      CONTAINER,
+      docx({ "word/document.xml": "<w:document xmlns:w='urn:w'>Changed elsewhere</w:document>" }),
+    );
+    const changed = disk();
+    await expect(
+      platform.containers?.replaceParts(CONTAINER, [{ part: "word/styles.xml", text: STYLES2 }], {
+        basis,
+      }),
+    ).rejects.toThrow(/has changed since/);
+    expect(disk()).toEqual(changed);
+    // With the right basis it goes through.
+    await platform.containers?.replaceParts(
+      CONTAINER,
+      [{ part: "word/styles.xml", text: STYLES2 }],
+      {
+        basis: changed,
+      },
+    );
+    expect(dec(readZip(disk()).bytes("word/styles.xml"))).toBe(STYLES2);
+  });
+
+  it("does nothing for an empty list", async () => {
+    const before = disk();
+    await platform.containers?.replaceParts(CONTAINER, []);
+    expect(disk()).toEqual(before);
+  });
+});
+
 describe("reading with a size limit", () => {
   it("passes the limit to ordinary files and ignores it for parts", async () => {
     memory.seedBinary("/demo/big.bin", new Uint8Array(20));

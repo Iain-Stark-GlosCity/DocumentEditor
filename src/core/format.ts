@@ -8,6 +8,7 @@
 import type { EditorState, Extension } from "@codemirror/state";
 import type { Explanation } from "./explain";
 import type { Finding } from "./findings";
+import type { RepairProvider } from "./repair";
 import type { SourceMapEntry } from "./source-map";
 import type { EditorView } from "@codemirror/view";
 
@@ -139,6 +140,8 @@ export interface BinaryView {
     bytes: Uint8Array,
     context: { path: string; part: string; locator: string },
   ): Promise<Explanation | null>;
+  /** Guided repairs and clean-ups for the file (see src/core/repair.ts). */
+  readonly repairs?: RepairProvider;
 }
 
 export interface EditorContext {

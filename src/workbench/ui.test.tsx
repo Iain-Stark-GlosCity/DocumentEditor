@@ -36,6 +36,7 @@ describe("menu bar", () => {
       "Save as…Ctrl+Shift+S",
       "Autosave",
       "Close tabCtrl+W",
+      "Clean up this file…",
     ]);
     expect(menuItem("File").getAttribute("aria-expanded")).toBe("true");
   });

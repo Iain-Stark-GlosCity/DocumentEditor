@@ -102,6 +102,18 @@ export function verifyPatched(
   part: string,
   expected: Uint8Array,
 ): void {
+  verifyPatchedParts(original, patched, new Map([[part, expected]]));
+}
+
+/**
+ * The same self-check for several parts at once: `patched` is `original` with exactly the parts in
+ * `expected` replaced by those bytes, and every other entry has the same name, order, size and CRC.
+ */
+export function verifyPatchedParts(
+  original: ZipArchive,
+  patched: Uint8Array,
+  expected: ReadonlyMap<string, Uint8Array>,
+): void {
   let check: ZipArchive;
   try {
     check = readZip(patched);
@@ -110,8 +122,10 @@ export function verifyPatched(
       cause: error,
     });
   }
-  if (!check.has(part) || !sameBytes(check.bytes(part), expected)) {
-    throw new Error(`Self-check failed: ${part} does not read back as the saved content`);
+  for (const [part, bytes] of expected) {
+    if (!check.has(part) || !sameBytes(check.bytes(part), bytes)) {
+      throw new Error(`Self-check failed: ${part} does not read back as the saved content`);
+    }
   }
   const before = original.entries;
   const after = check.entries;
@@ -124,7 +138,7 @@ export function verifyPatched(
     if (!a || !b || a.name !== b.name) {
       throw new Error("Self-check failed: the order or names of the entries changed");
     }
-    if (a.name === part) continue;
+    if (expected.has(a.name)) continue;
     if (a.size !== b.size || a.crc32 !== b.crc32) {
       throw new Error(`Self-check failed: ${a.name} would have been changed`);
     }
@@ -196,6 +210,7 @@ export class ContainerPlatform implements Platform {
     this.containers = {
       containerOf: (path) => this.containerOf(path),
       listParts: (container) => this.listParts(container),
+      replaceParts: (container, edits, options) => this.replaceParts(container, edits, options),
     };
   }
 
@@ -401,16 +416,76 @@ export class ContainerPlatform implements Platform {
     });
   }
 
-  /**
-   * The safe save for one part: a fresh read of the container, the new bytes from `produce`
-   * (which may refuse), a surgical patch, a self-check, a re-check that the file has not changed,
-   * a one-off backup and an atomic write. Writes to one container are serialised.
-   */
-  private patchPart(
+  /** Rewrites several text parts in one safe save (see `ContainerAccess.replaceParts`). */
+  private async replaceParts(
+    container: string,
+    edits: readonly { part: string; text: string }[],
+    options?: { basis?: Uint8Array },
+  ): Promise<void> {
+    if (edits.length === 0) return;
+    await this.patchParts(
+      container,
+      edits.length === 1 ? edits[0]!.part : `${edits.length} parts`,
+      (archive) => {
+        const out = new Map<string, Uint8Array>();
+        for (const { part, text } of edits) {
+          if (out.has(part)) throw new Error(`${part} appears twice in one save`);
+          const info = archive.info(part);
+          if (!info || info.isDirectory) {
+            throw new Error(`There is no part "${part}", and adding parts is not supported`);
+          }
+          if (!isTextPart(part))
+            throw new Error(`${part} is a binary part and cannot be saved as text`);
+          let bytes: Uint8Array;
+          try {
+            // The part's own BOM and encoding; the text already has its own line endings, so none
+            // are converted (`eol: "lf"` writes the text as it is).
+            const { format } = decodePartText(archive.bytes(part));
+            bytes = encodePartText(text, { ...format, eol: "lf", mixedEol: false });
+          } catch (error) {
+            throw new Error(`Could not save ${part}: ${describe(error)}. Nothing was saved.`, {
+              cause: error,
+            });
+          }
+          if (XML_EXTENSIONS.has(partExtension(part))) {
+            const problem = xmlProblem(text);
+            if (problem) {
+              throw new Error(`${part} is not well-formed XML (${problem}). Nothing was saved.`);
+            }
+          }
+          out.set(part, bytes);
+        }
+        return out;
+      },
+      options?.basis,
+    );
+  }
+
+  /** The safe save for one part: see `patchParts`. */
+  private async patchPart(
     container: string,
     part: string,
     produce: () => Uint8Array,
   ): Promise<{ modifiedMs: number }> {
+    const tokens = await this.patchParts(container, part, () => new Map([[part, produce()]]));
+    const token = tokens.get(part);
+    if (token === undefined) throw new Error(`Saved ${part} but lost track of its version`);
+    return { modifiedMs: token };
+  }
+
+  /**
+   * The safe save for one or more parts of one container, all in one write: a fresh read of the
+   * container, the new bytes from `produce` (which may refuse), a surgical patch, a self-check, a
+   * re-check that the file has not changed, a one-off backup and an atomic write. Writes to one
+   * container are serialised. Resolves with each patched part's new version token. `label` names
+   * what is being saved in error messages.
+   */
+  private patchParts(
+    container: string,
+    label: string,
+    produce: (archive: ZipArchive) => Map<string, Uint8Array>,
+    basis?: Uint8Array,
+  ): Promise<Map<string, number>> {
     const file = baseName(container);
     return this.serialised(container, async () => {
       // Always the bytes on disk right now: another program may have changed other parts.
@@ -419,40 +494,57 @@ export class ContainerPlatform implements Platform {
       try {
         fresh = await this.inner.readBinaryFile(container);
       } catch (error) {
-        throw new Error(`Could not read ${file} to save ${part}: ${describe(error)}`, {
+        throw new Error(`Could not read ${file} to save ${label}: ${describe(error)}`, {
           cause: error,
         });
+      }
+      if (basis && !sameBytes(basis, fresh.bytes)) {
+        throw new Error(
+          `${file} has changed since this change was prepared. Nothing was saved; try again.`,
+        );
       }
       let archive: ZipArchive;
       try {
         archive = readZip(fresh.bytes);
       } catch (error) {
         const why = error instanceof ArchiveError ? error.message : describe(error);
-        throw new Error(`Could not save ${part}: ${file} is not a readable archive (${why})`, {
+        throw new Error(`Could not save ${label}: ${file} is not a readable archive (${why})`, {
           cause: error,
         });
       }
       const tokens = this.tokensOf(container);
       tokens.sync(archive, fresh.modifiedMs);
 
-      const info = archive.info(part);
-      if (!info || info.isDirectory) {
-        throw new Error(`There is no part "${part}" in ${file}, and adding parts is not supported`);
+      const replacements = produce(archive);
+      for (const part of replacements.keys()) {
+        const info = archive.info(part);
+        if (!info || info.isDirectory) {
+          throw new Error(
+            `There is no part "${part}" in ${file}, and adding parts is not supported`,
+          );
+        }
       }
-      const bytes = produce();
 
       let patched: Uint8Array;
       try {
-        patched = archive.replace(part, bytes);
+        // One part at a time: each patch is read back before the next, so any fault is caught.
+        patched = fresh.bytes;
+        let current = archive;
+        for (const [part, bytes] of replacements) {
+          patched = current.replace(part, bytes);
+          current = readZip(patched);
+        }
       } catch (error) {
-        throw new Error(`Could not save ${part}: ${describe(error)}`, { cause: error });
+        throw new Error(`Could not save ${label}: ${describe(error)}`, { cause: error });
       }
-      verifyPatched(archive, patched, part, bytes);
+      verifyPatchedParts(archive, patched, replacements);
 
       // Another program may have written the file since we read it; do not overwrite that.
       // The time alone is not proof: FAT keeps it to 2 seconds and some programs restore it.
       // So the bytes on disk must still be the ones that were patched.
-      const changed = new Error(`${file} changed on disk while saving ${part}. Nothing was saved.`);
+      const changed = new Error(
+        `${file} changed on disk while saving ${label}. Nothing was saved.`,
+      );
       const before = await this.inner.statFile(container);
       if (!before || before.modifiedMs !== fresh.modifiedMs) throw changed;
       let current: Uint8Array;
@@ -480,11 +572,15 @@ export class ContainerPlatform implements Platform {
       this.cache.delete(container);
       await this.inner.writeBinaryFile(container, patched, { overwrite: true });
       const after = await this.inner.statFile(container);
-      if (!after) throw new Error(`${file} disappeared after saving ${part}`);
+      if (!after) throw new Error(`${file} disappeared after saving ${label}`);
       tokens.sync(readZip(patched), after.modifiedMs);
-      const token = tokens.get(part);
-      if (token === undefined) throw new Error(`Saved ${part} but lost track of its version`);
-      return { modifiedMs: token };
+      const result = new Map<string, number>();
+      for (const part of replacements.keys()) {
+        const token = tokens.get(part);
+        if (token === undefined) throw new Error(`Saved ${part} but lost track of its version`);
+        result.set(part, token);
+      }
+      return result;
     });
   }
 

@@ -76,6 +76,12 @@ export interface FakeContainers extends ContainerAccess {
   /** What `listParts` returns next; an Error makes it reject. */
   result: ContainerPart[] | Error;
   readonly listed: string[];
+  /** What `replaceParts` was asked to write. */
+  readonly replaced: {
+    container: string;
+    edits: { part: string; text: string }[];
+    basis?: Uint8Array;
+  }[];
 }
 
 /** Every `.docx` is a container, and so is every path inside one. */
@@ -83,6 +89,7 @@ export function fakeContainers(parts: ContainerPart[] = PARTS): FakeContainers {
   const fake: FakeContainers = {
     result: parts,
     listed: [],
+    replaced: [],
     containerOf(path) {
       const split = splitContainerPath(path);
       if (split) return split.container;
@@ -92,6 +99,14 @@ export function fakeContainers(parts: ContainerPart[] = PARTS): FakeContainers {
       fake.listed.push(container);
       const result = fake.result;
       return result instanceof Error ? Promise.reject(result) : Promise.resolve([...result]);
+    },
+    replaceParts(container, edits, options) {
+      fake.replaced.push({
+        container,
+        edits: edits.map((e) => ({ ...e })),
+        ...(options?.basis ? { basis: options.basis } : {}),
+      });
+      return Promise.resolve();
     },
   };
   return fake;

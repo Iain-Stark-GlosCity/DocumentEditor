@@ -5,11 +5,14 @@
 import type { DecodedView } from "../../core/format";
 import type { Explanation } from "../../core/explain";
 import type { Finding } from "../../core/findings";
+import type { RepairOffer, RepairPlan } from "../../core/repair";
 
 export interface DocxOps {
   decode: { args: { path: string }; result: DecodedView };
   inspect: { args: { path: string }; result: Finding[] };
   explain: { args: { path: string; part: string; locator: string }; result: Explanation | null };
+  repairOffers: { args: { path: string }; result: RepairOffer[] };
+  repairPlan: { args: { path: string; id: string }; result: RepairPlan | null };
 }
 
 export type DocxOp = keyof DocxOps;
@@ -33,6 +36,17 @@ export async function runDocxOp<K extends DocxOp>(
       return (await explainDocxBytes(
         bytes,
         args as DocxOps["explain"]["args"],
+      )) as DocxOps[K]["result"];
+    }
+    case "repairOffers": {
+      const { docxRepairOffers } = await import("./repair");
+      return (await docxRepairOffers(bytes)) as DocxOps[K]["result"];
+    }
+    case "repairPlan": {
+      const { docxRepairPlan } = await import("./repair");
+      return (await docxRepairPlan(
+        bytes,
+        (args as DocxOps["repairPlan"]["args"]).id,
       )) as DocxOps[K]["result"];
     }
   }

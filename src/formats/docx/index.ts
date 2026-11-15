@@ -32,6 +32,16 @@ export const docxProvider: TextFormatProvider = {
       const { callDocx } = await import("./worker-client");
       return callDocx("explain", bytes, context);
     },
+    repairs: {
+      async offers(bytes, context) {
+        const { callDocx } = await import("./worker-client");
+        return callDocx("repairOffers", bytes, { path: context.path });
+      },
+      async plan(bytes, context) {
+        const { callDocx } = await import("./worker-client");
+        return callDocx("repairPlan", bytes, { path: context.path, id: context.id });
+      },
+    },
   },
   // The view's headings are ATX Markdown on the same Lezer grammar, so the Markdown outline
   // reads them directly; HTML comments and inline tags are already skipped as markup there.

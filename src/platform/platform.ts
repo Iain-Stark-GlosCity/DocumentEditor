@@ -118,6 +118,19 @@ export interface ContainerAccess {
   containerOf(path: string): string | null;
   /** The parts of a container, in archive order. Rejects if the file is not a readable archive. */
   listParts(container: string): Promise<ContainerPart[]>;
+  /**
+   * Rewrites several text parts of a container in one save, through the same checks as saving a
+   * single part (fresh read, well-formed XML, self-check, changed-on-disk re-check, one-off backup,
+   * atomic write). Each text keeps its own line endings; the part's BOM and encoding are kept.
+   * Nothing is written if any part is refused. Only existing text parts can be rewritten.
+   * With `basis`, the container's bytes the edits were worked out from: if the file on disk is not
+   * byte-for-byte those bytes any more, nothing is written (the edits would undo someone's change).
+   */
+  replaceParts(
+    container: string,
+    edits: readonly { part: string; text: string }[],
+    options?: { basis?: Uint8Array },
+  ): Promise<void>;
 }
 
 export interface Platform {

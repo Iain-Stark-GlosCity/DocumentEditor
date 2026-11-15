@@ -11,7 +11,7 @@ Read these before changing anything substantial:
 - `docs/STATUS.md` what works, what is unverified, known rough edges, parked decisions.
 - `docs/ROADMAP.md` what to do next.
 - `docs/AGENT-PLAYBOOK.md` how work is delegated to sub-agents, merged and gated.
-- `docs/docx-view.md` and `docs/docx-integrity.md` the DOCX Formatting view and the inspector rules.
+- `docs/docx-view.md`, `docs/docx-integrity.md` and `docs/docx-repairs.md` the DOCX Formatting view, the inspector rules and the guided repairs.
 
 Scripts: `scripts/gate.sh [e2e]` (lint, typecheck, tests; must print GATE PASSED before any push) and
 `scripts/merge-agent.sh <agent-id> "<title>"`. Never pipe a check into `grep` in an `&&` chain.

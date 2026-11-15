@@ -287,3 +287,52 @@ test("a replacement of the wrong picture type is refused and changes nothing", a
   );
   expect(saved).toEqual(Array.from(original));
 });
+
+test("Clean up removes names from the properties in one verified save, with a backup", async ({
+  app,
+}) => {
+  const doc = new Document({
+    creator: "Jane Smith",
+    lastModifiedBy: "Bob Jones",
+    sections: [{ children: [new Paragraph({ children: [new TextRun("Hello")] })] }],
+  });
+  const original = new Uint8Array(await Packer.toBuffer(doc));
+  expect(strFromU8(unzipSync(original)["docProps/core.xml"] ?? new Uint8Array())).toContain(
+    "Jane Smith",
+  );
+  await openDocx(app, "explain.docx", original);
+
+  await app.getByRole("menuitem", { name: "File", exact: true }).click();
+  await app.getByRole("menuitem", { name: /Clean up this file/ }).click();
+  const choice = app.getByRole("option", { name: /Remove names from the document properties/ });
+  await expect(choice).toContainText("names or organisations");
+  await choice.click();
+  const confirm = app.getByRole("alertdialog", {
+    name: /Remove names from the document properties\?/,
+  });
+  await expect(confirm).toContainText("docProps/core.xml");
+  await expect(confirm).not.toContainText("Jane");
+  await confirm.getByRole("button", { name: "Apply" }).click();
+
+  await expect
+    .poll(() =>
+      app.evaluate(() =>
+        Array.from(window.__demoPlatform?.binaryFiles.get("/demo/explain.docx.bak") ?? []),
+      ),
+    )
+    .toEqual(Array.from(original));
+  const saved = await app.evaluate(() =>
+    Array.from(window.__demoPlatform?.binaryFiles.get("/demo/explain.docx") ?? []),
+  );
+  const before = unzipSync(original);
+  const after = unzipSync(Uint8Array.from(saved));
+  const changed = Object.keys(before).filter(
+    (n) => Buffer.compare(Buffer.from(before[n] ?? []), Buffer.from(after[n] ?? [])) !== 0,
+  );
+  expect(changed).toContain("docProps/core.xml");
+  expect(changed.every((n) => n.startsWith("docProps/"))).toBe(true);
+  const core = strFromU8(after["docProps/core.xml"] ?? new Uint8Array());
+  expect(core).not.toContain("Jane Smith");
+  expect(core).not.toContain("Bob Jones");
+  expect(strFromU8(after["word/document.xml"] ?? new Uint8Array())).toContain("Hello");
+});
