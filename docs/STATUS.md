@@ -29,6 +29,9 @@ Snapshot of where the project stands (15 Nov 2026). Update this file whenever a 
 - Pictures in Word files: the Explain pane lists a paragraph's pictures (name, alt text, drawn size)
   and opens the viewer; "Replace picture…" swaps the picture inside the file with one of the same
   type through the verified save path (confirmation first, backup kept, not undoable in the editor).
+- File > Clean up this file…: nine guided repairs (accept/reject tracked changes, remove comments or
+  resolved comments, four privacy clean-ups) saved in one verified write with a backup; see
+  docs/docx-repairs.md. Not yet tested against real Word.
 - Find widget, command palette, autosave, crash recovery with format kept, external-change
   detection, themes, zen mode, spellcheck, word count, split-pane layouts.
 

@@ -39,4 +39,21 @@ They are level 1 of "editing Word documents": no page-style editing, only precis
 
 ## Defined repairs
 
-See the source files. `docx.scrub-properties` (privacy.ts) is the reference example.
+| id | file | what it does |
+|---|---|---|
+| `docx.accept-tracked-changes` | tracked-changes.ts | Accepts insertions, deletions, moves, formatting changes and table-row changes in every story part |
+| `docx.reject-tracked-changes` | tracked-changes.ts | The reverse; restores old properties |
+| `docx.remove-comments` | comments.ts | Removes all comments, their anchors and their entries in the comment extension parts |
+| `docx.remove-resolved-comments` | comments.ts | Only resolved comments, with their replies |
+| `docx.scrub-properties` | privacy.ts | Empties creator, last-modified-by, company and manager (the reference example) |
+| `docx.anonymise-authors` | privacy.ts | Revision and comment authors become `Author N`; people.xml is anonymised |
+| `docx.remove-rsids` | privacy.ts | Removes editing-session ids |
+| `docx.remove-custom-properties` | privacy.ts | Removes custom properties; empties the template and hyperlink base |
+| `docx.clear-descriptive-properties` | privacy.ts | Empties title, subject, keywords, description, category, content status |
+
+Left alone on purpose, and listed to the user as such: paragraph-mark deletions and insertions
+(they merge paragraphs), cell-level revisions, numbering-change records on reject, content in
+`mc:AlternateContent` copies that would diverge, and the thumbnail image (parts cannot be deleted).
+
+Unverified against real Word: that emptied comment parts and the anonymised `people.xml` open
+cleanly. Test a cleaned file in Word before relying on them.
