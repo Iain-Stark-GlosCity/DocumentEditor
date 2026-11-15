@@ -15,6 +15,7 @@ import { outline } from "./outline";
 import { paneFocus } from "./pane-focus";
 import { parts } from "./parts";
 import { readOnly } from "./read-only";
+import { revealSourceFeature } from "./reveal-source";
 import { recovery } from "./recovery";
 import { ribbon } from "./ribbon";
 import { help } from "./help";
@@ -52,6 +53,7 @@ export const defaultFeatures: readonly Feature[] = [
   focusMode,
   outline,
   parts,
+  revealSourceFeature,
   readOnly,
   // F6 and Shift+F6 cycle every visible pane (see pane-focus.ts).
   paneFocus,

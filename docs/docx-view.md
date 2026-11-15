@@ -386,3 +386,33 @@ parts, which the Parts pane opens as XML):
 - The view never fails as a whole: a part or block that cannot be read becomes
   `<!-- error path=… message -->` followed by its raw XML, and the rest of the view carries on.
   Damaged XML is read as far as it goes, and the view says that it was damaged.
+
+## Reveal in source XML
+
+Each line of the view knows where it came from. With the cursor on a line, **View > Reveal in
+source XML** (Ctrl+Alt+X) opens the part that line was made from as an editable tab, such as
+`report.docx › document.xml`, and selects the element in it: the paragraph, table, note, comment,
+style and so on. An already open tab of the part is reused. The element is found by a *locator*,
+the path of names as written in the part with a position among same-named siblings
+(`/w:document/w:body/w:p[12]`), read back by the XML format, so it still works after the part has
+been tidied. If the part was edited so that the element is gone, the tab opens anyway and a
+notification says it could not be found.
+
+What the map covers:
+
+- every paragraph and table of the main body, and every paragraph inside a table cell (the
+  narrowest entry for a line wins, so a cell paragraph beats its table);
+- section lines (the `w:sectPr` they were made from);
+- footnotes, endnotes and comments (the note or comment as a whole; a note of several paragraphs
+  gives its paragraphs their own entries);
+- the paragraphs of headers and footers, in their own parts;
+- the entries of the Styles and Lists sections (`word/styles.xml`, `word/numbering.xml`);
+- the document properties, application, custom properties and settings lines.
+
+What it cannot point at:
+
+- a Markdown pipe table puts a whole row on one line, so every cell of that row maps to the row's
+  first cell; tables that need `<table>` give each cell paragraph its own line;
+- the lines of the legend, banners, and "not shown in this view" notes have no single source;
+- text a line shows that comes from another place (the number of a list item, a style's resolved
+  properties) points at the paragraph or style it is printed on, not at where the value is defined.

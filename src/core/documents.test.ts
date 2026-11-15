@@ -101,4 +101,27 @@ describe("documents store", () => {
     store.getState().setProvider(id, "markdown");
     expect(store.getState().documents).toBe(documents);
   });
+
+  describe("source map", () => {
+    const map = [{ fromLine: 7, toLine: 7, part: "word/document.xml", locator: "/w:document" }];
+    const more = [{ fromLine: 9, toLine: 9, part: "word/styles.xml", locator: "/w:styles" }];
+
+    it("is carried from the file on open, replaced on a reload and cleared when absent", () => {
+      const store = createDocumentsStore();
+      const id = store.getState().openFromFile("/a.docx", { ...data("x"), sourceMap: map }, "docx");
+      expect(store.getState().documents[0]?.sourceMap).toEqual(map);
+      store.getState().applyDisk(id, { ...data("y"), sourceMap: more });
+      expect(store.getState().documents[0]?.sourceMap).toEqual(more);
+      expect(store.getState().documents[0]?.savedText).toBe("y");
+      store.getState().applyDisk(id, data("z"));
+      expect(store.getState().documents[0]?.sourceMap).toBeUndefined();
+      expect("sourceMap" in store.getState().documents[0]!).toBe(false);
+    });
+
+    it("is absent for an ordinary file", () => {
+      const store = createDocumentsStore();
+      store.getState().openFromFile("/a.md", data("x"), "markdown");
+      expect(store.getState().documents[0]?.sourceMap).toBeUndefined();
+    });
+  });
 });

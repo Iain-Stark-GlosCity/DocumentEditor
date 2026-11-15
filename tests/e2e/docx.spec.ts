@@ -1,5 +1,14 @@
 import { unzipSync } from "fflate";
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
+import {
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+} from "docx";
 import { documentText, editor, expect, test } from "./fixtures";
 
 /** A small but real Word file, made by the `docx` package. */
@@ -124,4 +133,77 @@ test("editing one part of a Word file changes only that part, and broken XML is 
   await expect(app.getByText(/is not well-formed XML/)).toBeVisible();
   await expect(app.getByText(/Nothing was saved/)).toBeVisible();
   expect(await bytesOf(app, "/demo/report.docx")).toEqual(saved);
+});
+
+/** A Word file with a heading, a paragraph and a table, to reveal elements of. */
+async function makeDocxWithTable(): Promise<Uint8Array> {
+  const cell = (text: string) => new TableCell({ children: [new Paragraph(text)] });
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            children: [new TextRun("Quarterly report")],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun("Sales rose "),
+              new TextRun({ text: "twelve per cent", bold: true }),
+            ],
+          }),
+          new Table({
+            rows: [
+              new TableRow({ children: [cell("Cell alpha"), cell("Cell bravo")] }),
+              new TableRow({ children: [cell("Cell charlie"), cell("Cell delta")] }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  return new Uint8Array(await Packer.toBuffer(doc));
+}
+
+const selectedText = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => window.getSelection()?.toString() ?? "");
+
+test("Reveal in source XML jumps from a line of the view to that element in the part", async ({
+  app,
+}) => {
+  const original = await makeDocxWithTable();
+  await app.evaluate((bytes) => {
+    window.__demoPlatform?.seedBinary("/demo/report.docx", bytes);
+    window.__demoPlatform?.requestOpen(["/demo/report.docx"]);
+  }, Array.from(original));
+  await expect(app.getByRole("tab", { name: /report\.docx/ })).toBeVisible();
+  await expect(editor(app)).toContainText("Sales rose");
+  const viewTab = app.getByRole("tab", { name: /report\.docx/ }).filter({ hasNotText: "›" });
+  const partTab = app.getByRole("tab", { name: /report\.docx › document\.xml/ });
+
+  // From a paragraph, with the key.
+  await app.locator(".cm-line", { hasText: "Sales rose" }).click();
+  await app.keyboard.press("Control+Alt+x");
+  await expect(partTab).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => selectedText(app)).toContain("twelve per cent");
+  expect(await selectedText(app)).toMatch(/^<w:p[ >]/);
+  expect(await selectedText(app)).toMatch(/<\/w:p>$/);
+  expect(await selectedText(app)).not.toContain("Quarterly report");
+
+  // From a paragraph inside a table cell, with the View menu. The same tab is used again.
+  await viewTab.click();
+  await app.locator(".cm-line", { hasText: "Cell delta" }).first().click();
+  await app.getByRole("menuitem", { name: "View", exact: true }).click();
+  await app.getByRole("menuitem", { name: /Reveal in source XML/ }).click();
+  await expect(partTab).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => selectedText(app)).toContain("Cell delta");
+  expect(await selectedText(app)).toMatch(/^<w:p[ >]/);
+  expect(await selectedText(app)).not.toContain("Cell charlie");
+  await expect(app.getByRole("tab", { name: /report\.docx › document\.xml/ })).toHaveCount(1);
+
+  // On a line with no source (the legend at the top) the command does nothing.
+  await viewTab.click();
+  await app.locator(".cm-line").first().click();
+  await app.keyboard.press("Control+Alt+x");
+  await expect(viewTab).toHaveAttribute("aria-selected", "true");
 });

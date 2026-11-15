@@ -355,17 +355,40 @@ export function locatorOf(el: XElement): string {
       parts.push(cur.rawName);
       break;
     }
-    let index = 0;
-    let count = 0;
-    for (const c of parent.children) {
-      if (typeof c === "string" || c.rawName !== cur.rawName) continue;
-      count++;
-      if (c === cur) index = count;
-    }
+    const { index, count } = siblingPosition(parent, cur);
     parts.push(count > 1 ? `${cur.rawName}[${index}]` : cur.rawName);
     cur = parent;
   }
   return "/" + parts.reverse().join("/");
+}
+
+export interface Position {
+  index: number;
+  count: number;
+}
+
+/**
+ * Sibling positions per parent, built once on first use: a body of 10,000 paragraphs would
+ * otherwise cost a scan of every sibling for every locator. Parsed documents are never changed
+ * after parsing, so the cache cannot go stale.
+ */
+const positions = new WeakMap<XElement, Map<XElement, Position>>();
+
+export function siblingPosition(parent: XElement, el: XElement): Position {
+  let map = positions.get(parent);
+  if (!map) {
+    map = new Map();
+    const counts = new Map<string, number>();
+    for (const c of parent.children) {
+      if (typeof c === "string") continue;
+      const n = (counts.get(c.rawName) ?? 0) + 1;
+      counts.set(c.rawName, n);
+      map.set(c, { index: n, count: 0 });
+    }
+    for (const [c, pos] of map) pos.count = counts.get(c.rawName) ?? 1;
+    positions.set(parent, map);
+  }
+  return map.get(el) ?? { index: 1, count: 1 };
 }
 
 /** The element's source text, as written in the file. */

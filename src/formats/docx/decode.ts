@@ -3,7 +3,8 @@
  * reader and the generator stay out of the startup bundle.
  */
 import { readZip } from "../../core/archive";
-import { generateDocxView, MAX_MAIN_PART, type PartSource } from "./view";
+import type { DecodedView } from "../../core/format";
+import { generateDocxViewMapped, MAX_MAIN_PART, type PartSource } from "./view";
 
 /** Part bytes to text: UTF-8 by default, UTF-16 when a BOM says so; the BOM is dropped. */
 export function decodePart(bytes: Uint8Array): string {
@@ -15,7 +16,10 @@ export function decodePart(bytes: Uint8Array): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
-export async function decodeDocx(bytes: Uint8Array, context: { path: string }): Promise<string> {
+export async function decodeDocx(
+  bytes: Uint8Array,
+  context: { path: string },
+): Promise<DecodedView> {
   void context;
   const zip = readZip(bytes);
   if (!zip.has("word/document.xml")) {
@@ -45,5 +49,5 @@ export async function decodeDocx(bytes: Uint8Array, context: { path: string }): 
       return text;
     },
   };
-  return generateDocxView(source);
+  return generateDocxViewMapped(source);
 }

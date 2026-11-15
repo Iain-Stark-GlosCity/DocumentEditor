@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FileData, FileFormat } from "../platform/platform";
 import { DEFAULT_FILE_FORMAT } from "../platform/platform";
 import { containerTitle } from "./container-path";
+import type { SourceMapEntry } from "./source-map";
 
 export interface OpenDocument {
   id: string;
@@ -16,6 +17,11 @@ export interface OpenDocument {
   title: string;
   /** The file was deleted or moved outside the app. The document counts as unsaved until saved. */
   missingOnDisk?: boolean;
+  /**
+   * For a generated view (the Formatting view of a DOCX): which lines came from which element of
+   * which part. Replaced when the view is regenerated, absent for ordinary files.
+   */
+  sourceMap?: readonly SourceMapEntry[];
 }
 
 /**
@@ -95,6 +101,7 @@ export function createDocumentsStore(): DocumentsStore {
         savedText: data.text,
         modifiedMs: data.modifiedMs,
         title: containerTitle(path),
+        ...(data.sourceMap ? { sourceMap: data.sourceMap } : {}),
       };
       set((s) => ({ documents: [...s.documents, doc], activeId: id }));
       return id;
@@ -120,17 +127,20 @@ export function createDocumentsStore(): DocumentsStore {
 
     applyDisk(id, data) {
       set((s) => ({
-        documents: s.documents.map((d) =>
-          d.id === id
-            ? {
-                ...d,
-                savedText: data.text,
-                modifiedMs: data.modifiedMs,
-                format: data.format,
-                missingOnDisk: false,
-              }
-            : d,
-        ),
+        documents: s.documents.map((d) => {
+          if (d.id !== id) return d;
+          // The map belongs to the text it was made with: a new one replaces it, none clears it.
+          const { sourceMap: _old, ...rest } = d;
+          void _old;
+          return {
+            ...rest,
+            savedText: data.text,
+            modifiedMs: data.modifiedMs,
+            format: data.format,
+            missingOnDisk: false,
+            ...(data.sourceMap ? { sourceMap: data.sourceMap } : {}),
+          };
+        }),
       }));
     },
 

@@ -11,11 +11,13 @@ import {
   type Platform,
   type RecoverySnapshot,
 } from "./platform";
+import type { SourceMapEntry } from "../core/source-map";
 
 interface StoredFile {
   text: string;
   format: FileFormat;
   modifiedMs: number;
+  sourceMap?: readonly SourceMapEntry[];
 }
 
 /**
@@ -43,8 +45,19 @@ export class MemoryPlatform implements Platform {
 
   // Test helpers ------------------------------------------------------------------------
 
-  seedFile(path: string, text: string, format: FileFormat = DEFAULT_FILE_FORMAT): void {
-    this.files.set(path, { text, format: { ...format }, modifiedMs: this.tick() });
+  /** `sourceMap` makes the file read back like a generated view that knows where its lines came from. */
+  seedFile(
+    path: string,
+    text: string,
+    format: FileFormat = DEFAULT_FILE_FORMAT,
+    sourceMap?: readonly SourceMapEntry[],
+  ): void {
+    this.files.set(path, {
+      text,
+      format: { ...format },
+      modifiedMs: this.tick(),
+      ...(sourceMap ? { sourceMap } : {}),
+    });
   }
 
   /** The next `showOpenDialog` call resolves with these paths ([] means cancelled). */
@@ -105,7 +118,12 @@ export class MemoryPlatform implements Platform {
   async readFile(path: string): Promise<FileData> {
     const file = this.files.get(path);
     if (!file) throw new Error(`File not found: ${path}`);
-    return { text: file.text, format: { ...file.format }, modifiedMs: file.modifiedMs };
+    return {
+      text: file.text,
+      format: { ...file.format },
+      modifiedMs: file.modifiedMs,
+      ...(file.sourceMap ? { sourceMap: file.sourceMap } : {}),
+    };
   }
 
   async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {

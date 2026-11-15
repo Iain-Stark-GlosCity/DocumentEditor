@@ -24,6 +24,7 @@ import {
 import type { Numbering } from "./numbering";
 import type { Package } from "./package";
 import { describeProps, genericValue, revisionLabel, type PropContext } from "./props";
+import { SourceMarks, unmark } from "./source-marks";
 import type { Styles } from "./styles";
 import { child, elements, localName, textOf, type XDocument, type XElement } from "./xml";
 
@@ -58,6 +59,8 @@ export class Renderer {
   private readonly bookmarkNames = new Map<string, string>();
   private listWidths: number[] = [];
   readonly usedMedia = new Set<string>();
+  /** Ties the lines of the finished view back to the elements they came from. */
+  readonly marks = new SourceMarks();
 
   constructor(
     readonly pkg: Package,
@@ -100,9 +103,9 @@ export class Renderer {
     if (el.name !== "w:p") this.listWidths = [];
     switch (el.name) {
       case "w:p":
-        return [this.paragraphLine(el)];
+        return [this.marks.wrap(this.part, el, this.paragraphLine(el))];
       case "w:tbl":
-        return [this.table(el, depth)];
+        return [this.marks.wrap(this.part, el, this.table(el, depth))];
       case "w:sdt":
       case "w:customXml": {
         if (depth > MAX_DEPTH) return [rawPlaceholder(this.doc, el, 200)];
@@ -1082,7 +1085,8 @@ export class Renderer {
         const blocks: string[] = [];
         for (const b of cell.blocks) {
           try {
-            if (b.name === "w:p") blocks.push(this.paragraphLine(b, { inTable: true }));
+            if (b.name === "w:p")
+              blocks.push(this.marks.wrap(this.part, b, this.paragraphLine(b, { inTable: true })));
             else blocks.push(...this.block(b, depth + 1));
           } catch (error) {
             blocks.push(errorPlaceholder(this.doc, b, error));
@@ -1097,14 +1101,14 @@ export class Renderer {
       for (const row of rows) {
         const texts = row.cells.map((c) => {
           const text = rendered.get(c)![0]!;
-          return text === "<!-- p empty -->" ? "" : text;
+          return unmark(text) === "<!-- p empty -->" ? text.replace("<!-- p empty -->", "") : text;
         });
         // A paragraph comment (style, direct formatting, list) cannot be said in a pipe table.
         if (texts.some((t) => t.includes("<!-- p "))) {
           ok = false;
           break;
         }
-        lines.push(`| ${texts.map((t) => t.replace(/^$/, " ")).join(" | ")} |`);
+        lines.push(`| ${texts.map((t) => (unmark(t) === "" ? `${t} ` : t)).join(" | ")} |`);
         if (lines.length === 1) lines.push(`|${" --- |".repeat(width)}`);
       }
       if (ok) {
@@ -1251,7 +1255,7 @@ export class Renderer {
   private textBox(txbx: XElement, depth: number): string {
     if (depth > MAX_DEPTH) return rawPlaceholder(this.doc, txbx, 200);
     const saved = this.listWidths;
-    const parts = this.blocks(txbx, depth + 1).map((b) => b.replace(/\n/g, " "));
+    const parts = this.blocks(txbx, depth + 1).map((b) => unmark(b).replace(/\n/g, " "));
     this.listWidths = saved;
     return parts.join(" <p/> ");
   }
