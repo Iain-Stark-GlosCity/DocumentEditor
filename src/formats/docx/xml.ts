@@ -14,7 +14,10 @@
  */
 
 export interface XElement {
+  /** The canonical name (`w:p`), whatever prefix the file used. */
   readonly name: string;
+  /** The qualified name exactly as written in the file, for building locators (see `locatorOf`). */
+  readonly rawName: string;
   readonly attrs: Record<string, string>;
   readonly children: XNode[];
   readonly parent: XElement | null;
@@ -212,6 +215,7 @@ export function parseXml(source: string): XDocument {
     for (const [k, v] of rawAttrs) attrs[canonical(k, scope, true)] = v;
     const el: XElement = {
       name: canonical(rawName, scope, false),
+      rawName,
       attrs,
       children: [],
       parent: parentFrame ? parentFrame.el : null,
@@ -330,6 +334,35 @@ export function pathOf(el: XElement): string {
       if (c === cur) index = count;
     }
     parts.push(count > 1 || index > 1 ? `${cur.name}[${index}]` : cur.name);
+    cur = parent;
+  }
+  return "/" + parts.reverse().join("/");
+}
+
+/**
+ * A locator for the element that can be found again in the part's text by reading it as written:
+ * an XPath-like path of the qualified names AS WRITTEN IN THE FILE (not canonicalised), each with its
+ * 1-based position among siblings of the same written name. The position is left off when it is 1
+ * and the only element of that name (`/w:document/w:body/w:p[12]`, but `/w:document/w:body`).
+ * `TextFormatProvider.locate` of the XML format reads this form back.
+ */
+export function locatorOf(el: XElement): string {
+  const parts: string[] = [];
+  let cur: XElement | null = el;
+  while (cur) {
+    const parent: XElement | null = cur.parent;
+    if (!parent) {
+      parts.push(cur.rawName);
+      break;
+    }
+    let index = 0;
+    let count = 0;
+    for (const c of parent.children) {
+      if (typeof c === "string" || c.rawName !== cur.rawName) continue;
+      count++;
+      if (c === cur) index = count;
+    }
+    parts.push(count > 1 ? `${cur.rawName}[${index}]` : cur.rawName);
     cur = parent;
   }
   return "/" + parts.reverse().join("/");

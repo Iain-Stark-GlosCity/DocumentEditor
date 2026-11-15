@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { child, elements, parseXml, pathOf, sourceOf, textOf } from "./xml";
+import {
+  child,
+  elements,
+  locatorOf,
+  parseXml,
+  pathOf,
+  sourceOf,
+  textOf,
+  type XElement,
+} from "./xml";
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -63,5 +72,30 @@ describe("parseXml", () => {
     const r = elements(elements(child(doc.root, "w:body"))[1])[1]!;
     expect(pathOf(r)).toBe("/w:document/w:body/w:p[2]/w:r[2]");
     expect(sourceOf(doc, r)).toBe("<w:r><w:t>x</w:t></w:r>");
+  });
+});
+
+describe("locatorOf", () => {
+  it("names elements as written, with positions among same-named siblings", () => {
+    const doc = parseXml(
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/><w:p><w:r/><w:r/></w:p><w:sectPr/></w:body></w:document>',
+    );
+    const body = doc.root!.children[0] as XElement;
+    const secondP = body.children[1] as XElement;
+    const secondR = secondP.children[1] as XElement;
+    expect(locatorOf(doc.root!)).toBe("/w:document");
+    expect(locatorOf(body)).toBe("/w:document/w:body");
+    expect(locatorOf(secondP)).toBe("/w:document/w:body/w:p[2]");
+    expect(locatorOf(secondR)).toBe("/w:document/w:body/w:p[2]/w:r[2]");
+    expect(locatorOf(body.children[2] as XElement)).toBe("/w:document/w:body/w:sectPr");
+  });
+
+  it("uses the prefix the file used, not the canonical one", () => {
+    const doc = parseXml(
+      '<x:document xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><x:body><x:p/><x:p/></x:body></x:document>',
+    );
+    const body = doc.root!.children[0] as XElement;
+    expect((body.children[1] as XElement).name).toBe("w:p");
+    expect(locatorOf(body.children[1] as XElement)).toBe("/x:document/x:body/x:p[2]");
   });
 });

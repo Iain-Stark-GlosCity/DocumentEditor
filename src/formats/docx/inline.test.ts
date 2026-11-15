@@ -31,6 +31,7 @@ describe("escaping", () => {
     expect(
       tableWidth({
         name: "w:tblW",
+        rawName: "w:tblW",
         attrs: { "w:w": "2500", "w:type": "pct" },
         children: [],
         parent: null,

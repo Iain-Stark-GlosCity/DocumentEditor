@@ -137,6 +137,7 @@ export class Styles {
 function synthetic(name: string, attrs: Record<string, string>, base: XElement): XElement {
   return {
     name,
+    rawName: name,
     attrs,
     children: base.children,
     parent: base.parent,
@@ -160,5 +161,5 @@ export function mergeInto(map: PropMap, container: XElement | undefined): void {
 /** A property map as a container element, so the describer can read it. */
 export function asContainer(name: string, map: PropMap): XElement {
   const children = [...map.values()];
-  return { name, attrs: {}, children, parent: null, start: 0, end: 0 };
+  return { name, rawName: name, attrs: {}, children, parent: null, start: 0, end: 0 };
 }
