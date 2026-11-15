@@ -54,11 +54,15 @@ export function describeKind(name: string): string {
   return ext ? `${ext.toUpperCase()} data` : "Binary data";
 }
 
-function toBase64(bytes: Uint8Array): string {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(out);
+/** The bytes as a `data:` URL, encoded by the browser rather than by building a string by hand. */
+function toDataUrl(type: string, bytes: Uint8Array): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not encode the picture"));
+    // Part bytes are never backed by a SharedArrayBuffer; the cast only satisfies `BlobPart`.
+    reader.readAsDataURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
+  });
 }
 
 let current: BinaryPartInfo | null = null;
@@ -68,6 +72,8 @@ const set = (info: BinaryPartInfo | null) => {
   for (const l of [...listeners]) l();
 };
 
+let latestRequest = 0;
+
 /** Opens the viewer for a part. Notifies if the part cannot be read. */
 export async function showBinaryPart(
   wb: Workbench,
@@ -75,17 +81,20 @@ export async function showBinaryPart(
   part: string,
 ): Promise<boolean> {
   const name = part.slice(part.lastIndexOf("/") + 1);
+  // Only the newest request may show: a slow read of an earlier part must not replace a later one.
+  const request = ++latestRequest;
   try {
     const { bytes } = await wb.platform.readBinaryFile(joinContainerPath(container, part));
     const type = IMAGE_TYPES[extensionOf(name)];
+    const preview = type && bytes.length <= MAX_PREVIEW_BYTES ? await toDataUrl(type, bytes) : null;
+    if (request !== latestRequest) return false;
     set({
       container,
       part,
       name,
       size: bytes.length,
       bytes,
-      preview:
-        type && bytes.length <= MAX_PREVIEW_BYTES ? `data:${type};base64,${toBase64(bytes)}` : null,
+      preview,
     });
     return true;
   } catch (error) {
@@ -99,12 +108,12 @@ export async function showBinaryPart(
 
 async function saveCopy(wb: Workbench, info: BinaryPartInfo): Promise<void> {
   const ext = extensionOf(info.name);
-  const target = await wb.platform.showSaveDialog({
-    filters: [{ name: describeKind(info.name), extensions: ext ? [ext] : ["*"] }],
-    defaultPath: info.name,
-  });
-  if (target === null) return;
   try {
+    const target = await wb.platform.showSaveDialog({
+      filters: [{ name: describeKind(info.name), extensions: ext ? [ext] : ["*"] }],
+      defaultPath: info.name,
+    });
+    if (target === null) return;
     // The save dialog has already asked about replacing an existing file.
     await wb.platform.writeBinaryFile(target, info.bytes, { overwrite: true });
     wb.notify({ message: `Saved a copy of ${info.name}.` });
@@ -125,14 +134,26 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
     () => current,
   );
   const root = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState<string>("");
-  const [font, setFont] = useState<{ part: string; family: string | null } | null>(null);
+  // Both are kept with the part they describe, so neither outlives it or leaks to the next one.
+  const [dimensions, setDimensions] = useState<{ info: BinaryPartInfo; text: string } | null>(null);
+  const [failed, setFailed] = useState<BinaryPartInfo | null>(null);
+  const [font, setFont] = useState<{ info: BinaryPartInfo; family: string | null } | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const open = info !== null;
 
   useEffect(() => {
-    if (!info) return;
-    const previous = document.activeElement as HTMLElement | null;
-    root.current?.querySelector<HTMLElement>("button")?.focus();
-    return () => previous?.focus();
+    if (!open) return;
+    // The opener is what had focus before the dialog appeared, not a button inside it.
+    opener.current = document.activeElement as HTMLElement | null;
+    return () => {
+      const previous = opener.current;
+      opener.current = null;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (info) root.current?.querySelector<HTMLElement>("button")?.focus();
   }, [info]);
 
   useEffect(() => {
@@ -145,21 +166,21 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
         return;
       }
       release = preview?.release;
-      setFont({ part: info.part, family: preview?.family ?? null });
+      setFont({ info, family: preview?.family ?? null });
     });
     return () => {
       live = false;
       release?.();
+      setFont(null);
     };
   }, [info]);
 
   if (!info) return null;
   const isFont = FONT_EXTENSIONS.includes(extensionOf(info.name));
-  const fontFamily = font?.part === info.part ? font.family : null;
-  const close = () => {
-    setDimensions("");
-    set(null);
-  };
+  const fontLoaded = font?.info === info;
+  const fontFamily = fontLoaded ? font.family : null;
+  const size = dimensions?.info === info ? dimensions.text : "";
+  const close = () => set(null);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
@@ -173,7 +194,11 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
     const first = buttons[0];
     const last = buttons[buttons.length - 1];
     if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
+    // Focus on the dialog itself (after a click on its text) must not let Tab leave it.
+    if (document.activeElement === root.current) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -190,25 +215,28 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="binary-part-title"
+        tabIndex={-1}
         onKeyDown={onKeyDown}
       >
         <h2 id="binary-part-title">{info.name}</h2>
         <p className="binary-part-meta">
           {describeKind(info.name)}, {describeSize(info.size)}
-          {dimensions && `, ${dimensions}`}
+          {size && `, ${size}`}
           <br />
           <span className="binary-part-path">{info.part}</span>
         </p>
-        {info.preview ? (
+        {info.preview && failed !== info ? (
           <div className="binary-part-preview">
             <img
               src={info.preview}
               alt={`Preview of ${info.name}`}
               onLoad={(e) =>
-                setDimensions(
-                  `${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight} pixels`,
-                )
+                setDimensions({
+                  info,
+                  text: `${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight} pixels`,
+                })
               }
+              onError={() => setFailed(info)}
             />
           </div>
         ) : isFont && fontFamily ? (
@@ -227,12 +255,12 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
           </div>
         ) : (
           <p>
-            {isFont && font?.part === info.part
-              ? "This font could not be read, so it cannot be previewed. "
-              : ""}
-            {IMAGE_TYPES[extensionOf(info.name)]
-              ? "This picture is too large to preview here."
-              : "This part cannot be shown as text or as a picture."}{" "}
+            {isFont && fontLoaded ? "This font could not be read, so it cannot be previewed. " : ""}
+            {info.preview
+              ? "This picture could not be shown. "
+              : IMAGE_TYPES[extensionOf(info.name)]
+                ? "This picture is too large to preview here."
+                : "This part cannot be shown as text or as a picture."}{" "}
             You can save a copy to look at it in another program.
           </p>
         )}

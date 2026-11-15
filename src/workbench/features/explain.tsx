@@ -42,7 +42,9 @@ function useExplanation(wb: Workbench, container: string): Result {
   const entry = state && doc ? sourceAtCursor(wb) : undefined;
   // The view is regenerated (new `modifiedMs`) when a part is saved, so the explanation follows.
   const key = entry ? `${entry.part}\u0000${entry.locator}\u0000${doc?.modifiedMs}` : "";
-  const [result, setResult] = useState<Result>({ status: "idle" });
+  // The result is kept with the key it answers, so one for an earlier paragraph is never shown
+  // against a later one while the new answer is on its way.
+  const [answer, setAnswer] = useState<{ key: string; result: Result } | null>(null);
 
   useEffect(() => {
     if (!entry) return;
@@ -58,9 +60,13 @@ function useExplanation(wb: Workbench, container: string): Result {
             part: entry.part,
             locator: entry.locator,
           });
-          if (live) setResult(explanation ? { status: "ready", explanation } : { status: "none" });
+          if (live)
+            setAnswer({
+              key,
+              result: explanation ? { status: "ready", explanation } : { status: "none" },
+            });
         } catch {
-          if (live) setResult({ status: "failed" });
+          if (live) setAnswer({ key, result: { status: "failed" } });
         }
       })();
     }, EXPLAIN_DELAY_MS);
@@ -73,7 +79,8 @@ function useExplanation(wb: Workbench, container: string): Result {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, container, wb]);
 
-  return entry ? result : { status: "none" };
+  if (!entry) return { status: "none" };
+  return answer?.key === key ? answer.result : { status: "idle" };
 }
 
 function SourceLine({
@@ -100,6 +107,9 @@ function SourceLine({
 }
 
 function Row({ row, container, wb }: { row: ExplanationRow; container: string; wb: Workbench }) {
+  // A repair is offered once per explanation: its locator describes the file as it was read, and
+  // the view is not regenerated until the part is saved.
+  const [applied, setApplied] = useState(false);
   return (
     <div className="explain-row" role="group" aria-label={row.label}>
       <dt>{row.label}</dt>
@@ -119,15 +129,19 @@ function Row({ row, container, wb }: { row: ExplanationRow; container: string; w
               type="button"
               className="explain-fix-button"
               title={row.fix.detail}
-              onClick={() =>
-                void wb.removePartElement(
-                  joinContainerPath(container, row.fix!.part),
-                  row.fix!.locator,
-                )
-              }
+              aria-disabled={applied || undefined}
+              onClick={() => {
+                if (applied || !row.fix) return;
+                void wb
+                  .removePartElement(joinContainerPath(container, row.fix.part), row.fix.locator)
+                  .then((done) => {
+                    if (done) setApplied(true);
+                  });
+              }}
             >
               {row.fix.label}
             </button>
+            {applied && " Done. Save the part to keep it, or undo it in its tab."}
           </p>
         )}
         {row.overridden?.map((o) => (
@@ -152,7 +166,12 @@ function ExplainPanel({ workbench, container }: FeatureComponentProps & { contai
               <h3>{section.heading}</h3>
               <dl>
                 {section.rows.map((row) => (
-                  <Row key={row.label} row={row} container={container} wb={workbench} />
+                  <Row
+                    key={`${row.label}\u0000${row.fix?.locator ?? ""}`}
+                    row={row}
+                    container={container}
+                    wb={workbench}
+                  />
                 ))}
               </dl>
             </div>
