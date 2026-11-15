@@ -60,10 +60,16 @@ export function jsoncDiagnostics(text: string, parser: Parser): Diagnostic[] {
     found.push({ from, to, severity: "error", message: "Unterminated comment" });
   }
   if (masked.trim() === "") return found;
+  // The tree can hold several error nodes for one mistake (`{"a":` at the end of the text gives
+  // two, at the same place); one underline and one count are enough.
+  const seen = new Set<string>();
   parser.parse(masked).iterate({
     enter(node) {
       if (!node.type.isError) return;
       const { from, to } = widen(node.from, node.to, text.length);
+      const key = `${from}:${to}`;
+      if (seen.has(key)) return;
+      seen.add(key);
       found.push({ from, to, severity: "error", message: "Syntax error" });
     },
   });

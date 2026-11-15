@@ -11,6 +11,12 @@ function arg(el: XElement | undefined): string {
   return /^[\p{L}\p{N}.]+$/u.test(text) ? text : `(${text})`;
 }
 
+/** The text of a child that may be missing (Word writes equations with empty slots). */
+function part(el: XElement, name: string): string {
+  const c = child(el, name);
+  return c ? linearMath(c) : "";
+}
+
 function chr(el: XElement, prop: string, name: string, fallback: string): string {
   const v = child(child(el, prop), name)?.attrs["m:val"];
   return v === undefined ? fallback : v;
@@ -33,18 +39,18 @@ export function linearMath(el: XElement): string {
       return `${arg(child(el, "m:num"))}${type === "lin" ? "/" : type === "noBar" ? "¦" : "/"}${arg(child(el, "m:den"))}`;
     }
     case "m:sSup":
-      return `${linearMath(child(el, "m:e") ?? el)}^${arg(child(el, "m:sup"))}`;
+      return `${part(el, "m:e")}^${arg(child(el, "m:sup"))}`;
     case "m:sSub":
-      return `${linearMath(child(el, "m:e") ?? el)}_${arg(child(el, "m:sub"))}`;
+      return `${part(el, "m:e")}_${arg(child(el, "m:sub"))}`;
     case "m:sSubSup":
-      return `${linearMath(child(el, "m:e") ?? el)}_${arg(child(el, "m:sub"))}^${arg(child(el, "m:sup"))}`;
+      return `${part(el, "m:e")}_${arg(child(el, "m:sub"))}^${arg(child(el, "m:sup"))}`;
     case "m:sPre":
-      return `_${arg(child(el, "m:sub"))}^${arg(child(el, "m:sup"))}${linearMath(child(el, "m:e") ?? el)}`;
+      return `_${arg(child(el, "m:sub"))}^${arg(child(el, "m:sup"))}${part(el, "m:e")}`;
     case "m:rad": {
       const deg = child(el, "m:deg");
       const degText = deg ? linearMath(deg) : "";
       return degText
-        ? `√(${degText}&${linearMath(child(el, "m:e") ?? el)})`
+        ? `√(${degText}&${part(el, "m:e")})`
         : `√${arg(child(el, "m:e"))}`;
     }
     case "m:nary": {
@@ -53,7 +59,7 @@ export function linearMath(el: XElement): string {
       const sup = child(el, "m:sup");
       const subText = sub ? linearMath(sub) : "";
       const supText = sup ? linearMath(sup) : "";
-      return `${op}${subText ? `_${arg(sub)}` : ""}${supText ? `^${arg(sup)}` : ""} ${linearMath(child(el, "m:e") ?? el)}`;
+      return `${op}${subText ? `_${arg(sub)}` : ""}${supText ? `^${arg(sup)}` : ""} ${part(el, "m:e")}`;
     }
     case "m:d": {
       const beg = chr(el, "m:dPr", "m:begChr", "(");
@@ -65,11 +71,11 @@ export function linearMath(el: XElement): string {
         .join(sep)}${end}`;
     }
     case "m:func":
-      return `${linearMath(child(el, "m:fName") ?? el)}${arg(child(el, "m:e"))}`;
+      return `${part(el, "m:fName")}${arg(child(el, "m:e"))}`;
     case "m:limLow":
-      return `${linearMath(child(el, "m:e") ?? el)}_${arg(child(el, "m:lim"))}`;
+      return `${part(el, "m:e")}_${arg(child(el, "m:lim"))}`;
     case "m:limUpp":
-      return `${linearMath(child(el, "m:e") ?? el)}^${arg(child(el, "m:lim"))}`;
+      return `${part(el, "m:e")}^${arg(child(el, "m:lim"))}`;
     case "m:acc":
       return `${arg(child(el, "m:e"))}${chr(el, "m:accPr", "m:chr", "\u0302")}`;
     case "m:bar":

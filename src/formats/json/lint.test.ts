@@ -11,6 +11,18 @@ import {
 
 const state = (text: string) => EditorState.create({ doc: text });
 
+describe("JSON with comments, repeated error nodes", () => {
+  it("reports one error for a value missing at the end of the text", () => {
+    for (const text of ['{"a":', '{"é😀":', "[1,", '{"a": // c\n']) {
+      const found = jsoncDiagnostics(text, jsonLanguage.parser);
+      const spans = found.map((d) => `${d.from}:${d.to}`);
+      expect(new Set(spans).size, text).toBe(spans.length);
+      expect(found.length, text).toBeGreaterThan(0);
+      for (const d of found) expect(d.to).toBeLessThanOrEqual(text.length);
+    }
+  });
+});
+
 describe("strict JSON diagnostics", () => {
   it("reports nothing for valid or empty documents", async () => {
     expect(await strictDiagnostics(state('{"a": [1, 2]}'))).toEqual([]);

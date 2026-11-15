@@ -65,35 +65,38 @@ function scan(text: string, steps: Step[]): TextRange | null {
   let depth = 0;
   let from = -1;
   let pos = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+  // The text ended inside the target: a damaged part whose element was never closed. The element
+  // is still the one asked for, and runs to the end of the text.
+  const ended = (): TextRange | null => (from >= 0 ? { from, to: n } : null);
 
   while (pos < n) {
     const lt = text.indexOf("<", pos);
-    if (lt < 0) return null;
+    if (lt < 0) return ended();
     const next = text.charCodeAt(lt + 1);
     if (next === 33 /* ! */) {
       if (text.startsWith("<!--", lt)) {
         const end = text.indexOf("-->", lt + 4);
-        if (end < 0) return null;
+        if (end < 0) return ended();
         pos = end + 3;
       } else if (text.startsWith("<![CDATA[", lt)) {
         const end = text.indexOf("]]>", lt + 9);
-        if (end < 0) return null;
+        if (end < 0) return ended();
         pos = end + 3;
       } else {
         pos = declarationEnd(text, lt);
-        if (pos < 0) return null;
+        if (pos < 0) return ended();
       }
       continue;
     }
     if (next === 63 /* ? */) {
       const end = text.indexOf("?>", lt + 2);
-      if (end < 0) return null;
+      if (end < 0) return ended();
       pos = end + 2;
       continue;
     }
     if (next === CC_SLASH) {
       const gt = text.indexOf(">", lt + 2);
-      if (gt < 0) return null;
+      if (gt < 0) return ended();
       pos = gt + 1;
       if (depth > 0) {
         depth--;
@@ -127,7 +130,7 @@ function scan(text: string, steps: Step[]): TextRange | null {
       }
     } else if (!selfClosing) depth = 1;
   }
-  return null;
+  return ended();
 }
 
 /** The end of a `<!DOCTYPE ...>` or other declaration, which may hold an `[ ... ]` subset. */

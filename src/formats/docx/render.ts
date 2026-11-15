@@ -54,8 +54,9 @@ export class Renderer {
   doc: XDocument = { root: null, source: "", problems: [] };
   readonly usedStyles = new Set<string>();
   readonly commentAnchors = new Map<string, string>();
-  private readonly openComments = new Set<string>();
-  private readonly fields: Field[] = [];
+  private openComments = new Set<string>();
+  /** Fields that are open now. Each part has its own, so an unclosed field cannot leak out of it. */
+  private fields: Field[] = [];
   private readonly bookmarkNames = new Map<string, string>();
   private listWidths: number[] = [];
   readonly usedMedia = new Set<string>();
@@ -69,18 +70,35 @@ export class Renderer {
     readonly props: PropContext,
   ) {}
 
-  /** Switches to another part; returns a function that switches back. */
-  enter(part: string, doc: XDocument, kind: PartKind = "body"): () => void {
-    const prev = { part: this.part, doc: this.doc, list: this.listWidths, kind: this.partKind };
+  /**
+   * Switches to another part; returns a function that switches back and says how many fields the
+   * part left open. Open fields and comment ranges belong to the part: one that is never closed
+   * must not swallow the notes and headers that are rendered after it.
+   */
+  enter(part: string, doc: XDocument, kind: PartKind = "body"): () => number {
+    const prev = {
+      part: this.part,
+      doc: this.doc,
+      list: this.listWidths,
+      kind: this.partKind,
+      fields: this.fields,
+      comments: this.openComments,
+    };
     this.part = part;
     this.doc = doc;
     this.listWidths = [];
     this.partKind = kind;
+    this.fields = [];
+    this.openComments = new Set();
     return () => {
+      const unclosed = this.fields.length;
       this.part = prev.part;
       this.doc = prev.doc;
       this.listWidths = prev.list;
       this.partKind = prev.kind;
+      this.fields = prev.fields;
+      this.openComments = prev.comments;
+      return unclosed;
     };
   }
 
@@ -294,7 +312,14 @@ export class Renderer {
   /* ================= inline ================= */
 
   private emit(items: Item[], item: Item): void {
-    const sink = this.instrSink();
+    let sink = this.instrSink();
+    // Visible content where only the field's instruction belongs means the `separate` is missing.
+    // Word shows such text, so the view does too: the instruction read so far opens the field and
+    // the text becomes its result, instead of the text being folded into the instruction and lost.
+    if (sink && showsContent(item) && !this.fields.some((f) => f !== sink && f.phase === "instr")) {
+      this.openResult(sink, item.wrappers, items);
+      sink = this.instrSink();
+    }
     if (sink !== undefined) {
       if (sink && !item.token) sink.instr += item.text;
       return;
@@ -335,7 +360,10 @@ export class Renderer {
         const rel = a["r:id"] ? this.pkg.relsOf(this.part).get(a["r:id"]) : undefined;
         let url = rel ? rel.target : a["r:id"] ? `${a["r:id"]} (missing relationship)` : "";
         if (a["w:anchor"]) url += `#${a["w:anchor"]}`;
-        const title = a["w:tooltip"] ? ` ${JSON.stringify(a["w:tooltip"])}` : "";
+        // `<` is escaped so that a tooltip holding `<!--` cannot open an HTML comment.
+        const title = a["w:tooltip"]
+          ? ` ${JSON.stringify(a["w:tooltip"]).replace(/</g, "\\<")}`
+          : "";
         const extra: Attr[] = [];
         if (a["w:tgtFrame"]) extra.push(["target-frame", a["w:tgtFrame"]]);
         if (a["w:docLocation"]) extra.push(["doc-location", a["w:docLocation"]]);
@@ -822,15 +850,7 @@ export class Renderer {
       return;
     }
     if (type === "separate") {
-      field.phase = "result";
-      const parent = this.instrSink();
-      if (parent === null) return; // A nested field's cached result inside another field's code.
-      field.opened = true;
-      this.token(
-        items,
-        wrappers,
-        tag("field", [["code", normaliseInstr(field.instr)], ...field.attrs]),
-      );
+      this.openResult(field, wrappers, items);
       return;
     }
     if (type === "end") {
@@ -851,7 +871,20 @@ export class Renderer {
     }
   }
 
-  /** Fields left open at the end of the document. */
+  /** The field's instruction is complete: write its opening tag, and what follows is its result. */
+  private openResult(field: Field, wrappers: readonly Wrapper[], items: Item[]): void {
+    field.phase = "result";
+    // A nested field's cached result inside another field's code is not shown.
+    if (this.instrSink() === null) return;
+    field.opened = true;
+    this.token(
+      items,
+      wrappers,
+      tag("field", [["code", normaliseInstr(field.instr)], ...field.attrs]),
+    );
+  }
+
+  /** Fields left open at the end of the part being rendered. */
   unclosedFields(): number {
     return this.fields.length;
   }
@@ -1104,7 +1137,8 @@ export class Renderer {
           return unmark(text) === "<!-- p empty -->" ? text.replace("<!-- p empty -->", "") : text;
         });
         // A paragraph comment (style, direct formatting, list) cannot be said in a pipe table.
-        if (texts.some((t) => t.includes("<!-- p "))) {
+        // Nor can a pipe that is not escaped: it would end the cell, inside a tag as much as in text.
+        if (texts.some((t) => t.includes("<!-- p ") || hasBarePipe(t))) {
           ok = false;
           break;
         }
@@ -1301,6 +1335,11 @@ export class Renderer {
 
 const skipped = new WeakSet<XElement>();
 
+/** Whether a cell's text holds a `|` that is not escaped (`\|`), which a pipe table reads as a cell end. */
+function hasBarePipe(text: string): boolean {
+  return unmark(text).replace(/\\[\s\S]/g, "").includes("|");
+}
+
 function nextElement(el: XElement): XElement | undefined {
   const siblings = el.parent?.children ?? [];
   const i = siblings.indexOf(el);
@@ -1342,8 +1381,15 @@ function customXmlAttrs(el: XElement): Attr[] {
 /** Markdown link destination: `<…>` when it holds spaces or brackets. */
 function linkTarget(url: string): string {
   if (url === "") return "<>";
-  if (/[\s()<>]/.test(url)) return `<${url.replace(/[<>]/g, (c) => encodeURIComponent(c))}>`;
+  if (/[\s()<>]/.test(url))
+    return `<${url.replace(/[<>\r\n]/g, (c) => encodeURIComponent(c))}>`;
   return url;
+}
+
+/** Text or a token that the reader should see, as opposed to markers that carry no content. */
+function showsContent(item: Item): boolean {
+  if (!item.token) return item.text.trim() !== "";
+  return /^(?:<(?:drawing|vml|math)\b|\[\^)/.test(item.text);
 }
 
 function normaliseInstr(instr: string): string {
