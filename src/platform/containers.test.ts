@@ -302,6 +302,93 @@ describe("replacing a binary part", () => {
     ).rejects.toThrow();
     expect(disk()).toEqual(before);
   });
+
+  // The binary path shares `patchPart` with text saves; these prove each check still applies to it.
+
+  it("refuses, with 'Nothing was saved', when the file changes on disk during the replace", async () => {
+    const real = memory.readBinaryFile.bind(memory);
+    vi.spyOn(memory, "readBinaryFile").mockImplementationOnce(async (path) => {
+      const result = await real(path);
+      memory.seedBinary(CONTAINER, docx({ "word/document.xml": "<other-program/>" }));
+      return result;
+    });
+    const promise = platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, {
+      overwrite: true,
+    });
+    await expect(promise).rejects.toThrow(/changed on disk.*Nothing was saved/);
+    const now = readZip(disk());
+    expect(dec(now.bytes("word/document.xml"))).toBe("<other-program/>");
+    expect(Array.from(now.bytes("word/media/image1.png"))).toEqual(Array.from(PNG));
+    expect(memory.binaryFiles.has(`${CONTAINER}.bak`)).toBe(false);
+  });
+
+  it("is blocked by the self-check before anything is written", async () => {
+    const original = disk();
+    fault.mode = "other";
+    await expect(
+      platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, { overwrite: true }),
+    ).rejects.toThrow(/Self-check failed/);
+    expect(disk()).toEqual(original);
+    expect(memory.binaryFiles.has(`${CONTAINER}.bak`)).toBe(false);
+  });
+
+  it("does not replace when the backup fails", async () => {
+    const original = disk();
+    memory.failNextBinaryWrite = new Error("read-only folder");
+    await expect(
+      platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, { overwrite: true }),
+    ).rejects.toThrow(/Could not back up/);
+    expect(disk()).toEqual(original);
+  });
+
+  it("lands both of two concurrent replacements in one container", async () => {
+    setup(docx({ "word/media/image2.png": Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 42]) }));
+    const second = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 1, 1]);
+    await Promise.all([
+      platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, { overwrite: true }),
+      platform.writeBinaryFile(part("word/media/image2.png"), second, { overwrite: true }),
+      platform.writeFile(part("word/styles.xml"), "<styles>three</styles>", LF),
+    ]);
+    const now = readZip(disk());
+    expect(Array.from(now.bytes("word/media/image1.png"))).toEqual(Array.from(NEW_PNG));
+    expect(Array.from(now.bytes("word/media/image2.png"))).toEqual(Array.from(second));
+    expect(dec(now.bytes("word/styles.xml"))).toBe("<styles>three</styles>");
+  });
+
+  it("with identical bytes changes no entry and keeps the part's version token", async () => {
+    const before = readZip(disk());
+    const token = (await platform.statFile(part("word/media/image1.png")))?.modifiedMs;
+    await platform.writeBinaryFile(part("word/media/image1.png"), PNG.slice(), { overwrite: true });
+    const now = readZip(disk());
+    for (const entry of before.entries) {
+      if (entry.isDirectory) continue;
+      expect(now.bytes(entry.name)).toEqual(before.bytes(entry.name));
+    }
+    expect((await platform.statFile(part("word/media/image1.png")))?.modifiedMs).toBe(token);
+  });
+
+  it("keeps a stored (uncompressed) picture stored, and handles unusual part names", async () => {
+    const name = "word/media/Bild 1 (ü) #2!.png";
+    setup(
+      zipSync({
+        "[Content_Types].xml": enc("<Types/>"),
+        "word/document.xml": enc(DOC),
+        [name]: [PNG, { level: 0 }],
+      }),
+    );
+    const bigger = new Uint8Array(4096).fill(7); // compresses well, so deflate would be chosen
+    bigger.set([0x89, 0x50, 0x4e, 0x47]);
+    await platform.writeBinaryFile(part(name), bigger, { overwrite: true });
+    const now = readZip(disk());
+    expect(now.entries.map((e) => e.name)).toEqual([
+      "[Content_Types].xml",
+      "word/document.xml",
+      name,
+    ]);
+    expect(Array.from(now.bytes(name))).toEqual(Array.from(bigger));
+    expect(now.info(name)?.compressedSize).toBe(bigger.length);
+    expect((await platform.readBinaryFile(part(name))).bytes).toEqual(bigger);
+  });
 });
 
 describe("saving a part", () => {

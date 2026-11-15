@@ -181,8 +181,9 @@ function ExplainPanel({ workbench, container }: FeatureComponentProps & { contai
             <div>
               <h3>Pictures</h3>
               <ul className="explain-pictures">
-                {result.explanation.pictures.map((picture) => (
-                  <li key={picture.part}>
+                {result.explanation.pictures.map((picture, index) => (
+                  // One picture can be drawn more than once, so its part is not a unique key.
+                  <li key={`${index}\u0000${picture.part}`}>
                     <span className="explain-value">{picture.name || picture.part}</span>
                     {picture.size && <span>, {picture.size}</span>}
                     <p className="explain-note">
@@ -191,6 +192,8 @@ function ExplainPanel({ workbench, container }: FeatureComponentProps & { contai
                     <button
                       type="button"
                       className="explain-fix-button"
+                      // Several pictures give several buttons: the name tells them apart.
+                      aria-label={`Show picture ${picture.name || picture.part}`}
                       onClick={() => void showBinaryPart(workbench, container, picture.part)}
                     >
                       Show picture

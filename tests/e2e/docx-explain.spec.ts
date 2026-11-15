@@ -189,7 +189,8 @@ test("a picture can be found from its paragraph and replaced, safely", async ({ 
     ),
     (c) => c.charCodeAt(0),
   );
-  const replacement = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7, 7]);
+  // A PNG signature and IHDR chunk (all the type check looks at), then other bytes.
+  const replacement = Uint8Array.from([...png.slice(0, 33), 7, 7, 7, 7]);
   const doc = new Document({
     sections: [
       {

@@ -111,7 +111,7 @@ export function verifyPatched(
     });
   }
   if (!check.has(part) || !sameBytes(check.bytes(part), expected)) {
-    throw new Error(`Self-check failed: ${part} does not read back as the saved text`);
+    throw new Error(`Self-check failed: ${part} does not read back as the saved content`);
   }
   const before = original.entries;
   const after = check.entries;
