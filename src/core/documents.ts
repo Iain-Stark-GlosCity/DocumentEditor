@@ -56,9 +56,12 @@ export function baseName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
-/** Windows paths are case-insensitive; treat them so everywhere. */
-function samePath(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
+/**
+ * Windows paths are case-insensitive and accept either slash; treat them so everywhere. A
+ * container part (`C:/a.docx!/word/document.xml`) compares the same way.
+ */
+export function samePath(a: string, b: string): boolean {
+  return a.replace(/\\/g, "/").toLowerCase() === b.replace(/\\/g, "/").toLowerCase();
 }
 
 export function createDocumentsStore(): DocumentsStore {

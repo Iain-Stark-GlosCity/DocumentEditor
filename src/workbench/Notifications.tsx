@@ -15,9 +15,9 @@ export function Notifications({ workbench }: { workbench: Workbench }) {
         >
           <span>{n.message}</span>
           <span className="banner-actions">
-            {n.actions?.map((action) => (
+            {n.actions?.map((action, i) => (
               <button
-                key={action.label}
+                key={`${i}:${action.label}`}
                 type="button"
                 onClick={() => {
                   workbench.dismissNotification(n.id);

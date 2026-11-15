@@ -262,6 +262,7 @@ export const externalChanges: Feature = {
             { value: "cancel", label: "Cancel" },
           ],
           cancelValue: "cancel",
+          initialFocus: "cancel",
         });
         return choice === "overwrite";
       }),

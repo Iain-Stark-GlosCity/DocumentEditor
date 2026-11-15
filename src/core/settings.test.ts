@@ -79,6 +79,30 @@ describe("SettingsStore", () => {
     expect(s.get("editor.fontSize")).toBe(22);
   });
 
+  it("survives hostile stored values of every shape, falling back per key", () => {
+    const s = new SettingsStore();
+    s.load(
+      JSON.stringify({
+        "editor.fontSize": "20",
+        "editor.wordWrap": 1,
+        "appearance.theme": null,
+        "files.autoSaveDelayMs": -5,
+        "files.recoveryIntervalMs": 1e12,
+        "ui.paneSizes": { outline: "wide", preview: 50 },
+        "csv.previewRows": 100.5,
+        constructor: 1,
+        toString: 2,
+      }),
+    );
+    expect(s.serialise()).toBe("{}\n");
+    s.load('{"__proto__": {"editor.fontSize": 30}, "editor.fontSize": 18}');
+    expect(s.get("editor.fontSize")).toBe(18);
+    expect(({} as Record<string, unknown>)["editor.fontSize"]).toBeUndefined();
+    s.load('{"ui.paneSizes": {"outline": 0}, "appearance.theme": 5}');
+    expect(s.get("ui.paneSizes")).toEqual({});
+    expect(s.get("appearance.theme")).toBe("system");
+  });
+
   it("load resets keys missing from the file to their defaults", () => {
     const s = new SettingsStore();
     s.set("editor.fontSize", 22);

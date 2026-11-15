@@ -26,6 +26,9 @@ function parseKey(notation: string): ParsedKey {
 
 /** Does a keyboard event match a CodeMirror-style key such as `Mod-Shift-s`? */
 export function matchesKey(event: KeyboardEvent, notation: string): boolean {
+  // AltGr arrives as Ctrl+Alt on Windows. It types a character on many layouts, so it is never
+  // the Ctrl+Alt of a shortcut.
+  if (event.getModifierState?.("AltGraph")) return false;
   const wanted = parseKey(notation);
   if (wanted.mod !== (event.ctrlKey || event.metaKey)) return false;
   if (wanted.shift !== event.shiftKey) return false;

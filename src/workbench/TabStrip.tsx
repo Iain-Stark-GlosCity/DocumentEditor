@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, type KeyboardEvent } from "react";
 import type { OpenDocument } from "../core/documents";
 
 export const tabId = (id: string) => `tab-${id}`;
@@ -22,9 +22,27 @@ export function TabStrip({
   onSelect,
   onClose,
 }: TabStripProps) {
+  // Ctrl+Tab and the like can activate a tab that is scrolled out of sight.
+  useEffect(() => {
+    if (activeId !== null) {
+      document
+        .getElementById(tabId(activeId))
+        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
+  }, [activeId]);
+
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const index = documents.findIndex((d) => d.id === activeId);
+    // Movement starts from the tab that has focus, which is the active one unless a mouse
+    // click on the close button left focus elsewhere.
+    const focused = documents.findIndex((d) => tabId(d.id) === (event.target as HTMLElement).id);
+    const index = focused >= 0 ? focused : documents.findIndex((d) => d.id === activeId);
     if (index < 0) return;
+    if (event.key === "Delete" && focused >= 0) {
+      event.preventDefault();
+      const doc = documents[focused];
+      if (doc) onClose(doc.id);
+      return;
+    }
     let next: number;
     switch (event.key) {
       case "ArrowRight":

@@ -16,7 +16,12 @@ import {
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { CommandRegistry } from "../core/commands";
-import { createDocumentsStore, type DocumentsStore, type OpenDocument } from "../core/documents";
+import {
+  createDocumentsStore,
+  samePath,
+  type DocumentsStore,
+  type OpenDocument,
+} from "../core/documents";
 import type { CommandHost } from "../core/format";
 import type { FormatRegistry } from "../core/registry";
 import { SettingsStore } from "../core/settings";
@@ -38,6 +43,11 @@ export interface DialogRequest {
   actions: DialogAction[];
   /** Returned when the dialog is dismissed with Escape. */
   cancelValue: string;
+  /**
+   * The action that starts with keyboard focus. Default: the first. Name the safe choice (for
+   * example Cancel) when the first action destroys something, so a stray Enter does no harm.
+   */
+  initialFocus?: string;
 }
 
 export interface PendingDialog extends DialogRequest {
@@ -218,6 +228,10 @@ export class Workbench {
   private readonly saveGuards = new Set<SaveGuard>();
   private readonly quitHooks = new Set<() => void | Promise<void>>();
   private readonly saving = new Map<string, Promise<void>>();
+  /** The end of the queued writes of each document: writes of one document never overlap. */
+  private readonly writeQueue = new Map<string, Promise<unknown>>();
+  /** A close in progress per document, so a second request joins it instead of asking again. */
+  private readonly closing = new Map<string, Promise<boolean>>();
   private readonly autosaveHolds = new Map<string, Set<string>>();
   private knownDocuments = new Map<string, OpenDocument>();
   private readonly formatSettingStops = new Map<string, Unsubscribe>();
@@ -312,7 +326,11 @@ export class Workbench {
     const stops = this.stops;
     if (!stops) return;
     this.stops = null;
-    this.ui.getState().pick?.resolve(null);
+    // Whoever awaits a dialog or a pick must not wait for ever: answer them as if dismissed.
+    const { pick, dialogs } = this.ui.getState();
+    this.ui.setState({ pick: null, dialogs: [], paletteOpen: false });
+    pick?.resolve(null);
+    for (const dialog of dialogs) dialog.resolve(dialog.cancelValue);
     if (this.settingsTimer !== null) {
       clearTimeout(this.settingsTimer);
       this.settingsTimer = null;
@@ -402,8 +420,8 @@ export class Workbench {
       this.notify({ kind: "error", message: `Unknown command "${id}"` });
       return;
     }
-    if (command.enabled && !command.enabled()) return;
     try {
+      if (command.enabled && !command.enabled()) return;
       await command.run();
     } catch (e) {
       this.notify({ kind: "error", message: message(e) });
@@ -671,8 +689,9 @@ export class Workbench {
   ): Promise<{ opened: boolean; id: string | null; range: { from: number; to: number } | null }> {
     const failed = { opened: false, id: null, range: null };
     const find = () => {
-      const lower = path.toLowerCase();
-      return this.documents.getState().documents.find((d) => d.path?.toLowerCase() === lower);
+      return this.documents
+        .getState()
+        .documents.find((d) => d.path !== null && samePath(d.path, path));
     };
     let doc = find();
     if (doc) this.documents.getState().setActive(doc.id);
@@ -730,8 +749,9 @@ export class Workbench {
    * different element in the edited text).
    */
   async removePartElement(path: string, locator: string): Promise<boolean> {
-    const lower = path.toLowerCase();
-    const open = this.documents.getState().documents.find((d) => d.path?.toLowerCase() === lower);
+    const open = this.documents
+      .getState()
+      .documents.find((d) => d.path !== null && samePath(d.path, path));
     if (open && this.isDirty(open.id)) {
       this.notify({
         kind: "warning",
@@ -834,8 +854,35 @@ export class Workbench {
       this.notify({ kind: "error", message: `Could not save a copy: ${error}` });
       return { ok: false, reason: "error", error };
     }
+    // Another tab already shows that file. Two tabs for one path would each think they own it,
+    // so the other one is closed once its file has been replaced, after asking.
+    const other = this.documents
+      .getState()
+      .documents.find((d) => d.id !== doc.id && d.path !== null && samePath(d.path, path));
+    if (other) {
+      const choice = await this.ask({
+        title: `Replace ${other.title}?`,
+        message: this.isDirty(other.id)
+          ? `${other.title} is open in another tab with unsaved changes. Saving here replaces the file and closes that tab, and its changes are lost.`
+          : `${other.title} is open in another tab. Saving here replaces the file and closes that tab.`,
+        actions: [
+          { value: "replace", label: "Replace" },
+          { value: "cancel", label: "Cancel" },
+        ],
+        cancelValue: "cancel",
+        initialFocus: "cancel",
+      });
+      if (choice !== "replace") return { ok: false, reason: "cancelled" };
+    }
     const result = await this.writeTo(doc, path, text, false);
-    if (result.ok) this.followSavedExtension(doc.id, path);
+    if (result.ok) {
+      this.followSavedExtension(doc.id, path);
+      if (other && this.docById(other.id)) {
+        this.buffers.delete(other.id);
+        this.documents.getState().close(other.id);
+        this.documents.getState().setActive(doc.id);
+      }
+    }
     return result;
   }
 
@@ -856,8 +903,24 @@ export class Workbench {
     this.notify({ message: `Now treating this file as ${claimed.name}` });
   }
 
-  /** Closes a document, asking first if it has unsaved changes. Returns false if cancelled. */
-  async closeDocument(id: string | null = this.documents.getState().activeId): Promise<boolean> {
+  /**
+   * Closes a document, asking first if it has unsaved changes. Returns false if cancelled. A
+   * second request for a document that is already being closed joins the first, so there is
+   * never more than one "Save changes?" dialog for it.
+   */
+  closeDocument(id: string | null = this.documents.getState().activeId): Promise<boolean> {
+    const doc = this.docById(id);
+    if (!doc) return Promise.resolve(false);
+    const pending = this.closing.get(doc.id);
+    if (pending) return pending;
+    const run = this.closeNow(doc.id).finally(() => this.closing.delete(doc.id));
+    this.closing.set(doc.id, run);
+    return run;
+  }
+
+  private async closeNow(id: string): Promise<boolean> {
+    // An automatic save in flight settles first: the question below is then about what is left.
+    await this.settleWrites(id);
     const doc = this.docById(id);
     if (!doc) return false;
     if (this.isDirty(doc.id)) {
@@ -886,13 +949,48 @@ export class Workbench {
     return id === null ? undefined : this.documents.getState().documents.find((d) => d.id === id);
   }
 
+  /** Resolves once every queued or running write of the document has finished. */
+  private async settleWrites(id: string): Promise<void> {
+    while (this.writeQueue.has(id)) await this.writeQueue.get(id);
+  }
+
+  /**
+   * Writes one document. Writes of the same document run one after another, so an automatic save
+   * and a manual one can never interleave (which could leave the file with one text and the
+   * saved state with the other).
+   */
   private async writeTo(
     doc: OpenDocument,
     path: string,
     text: string,
     auto: boolean,
   ): Promise<SaveResult> {
+    const run = (this.writeQueue.get(doc.id) ?? Promise.resolve()).then(() =>
+      this.writeNow(doc.id, path, text, auto),
+    );
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.writeQueue.set(doc.id, tail);
     try {
+      return await run;
+    } finally {
+      if (this.writeQueue.get(doc.id) === tail) this.writeQueue.delete(doc.id);
+    }
+  }
+
+  private async writeNow(
+    id: string,
+    path: string,
+    text: string,
+    auto: boolean,
+  ): Promise<SaveResult> {
+    try {
+      // Read after waiting: an earlier write may have given the document a path or a newer
+      // modified time, and the guards compare against that.
+      const doc = this.docById(id);
+      if (!doc) return { ok: false, reason: "error", error: "No such document" };
       for (const guard of [...this.saveGuards]) {
         if (!(await guard({ doc, path, text, interactive: !auto }))) {
           return { ok: false, reason: "blocked" };
@@ -969,6 +1067,7 @@ export class Workbench {
         { value: "cancel", label: "Cancel" },
       ],
       cancelValue: "cancel",
+      initialFocus: "cancel",
     });
     return choice === "close";
   }
@@ -1100,14 +1199,29 @@ export class Workbench {
   /** One handler for every shortcut, whether focus is in the editor or elsewhere. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     const ui = this.ui.getState();
-    if (ui.dialogs.length > 0 || ui.paletteOpen) return;
+    // Modal surfaces own the keyboard: nothing behind them may run.
+    if (ui.dialogs.length > 0 || ui.paletteOpen || ui.pick !== null) return;
     if (event.isComposing || event.repeat) return;
     for (const command of this.commands.all()) {
       if (command.nativeKey) continue;
       if (!commandKeys(command).some((key) => matchesKey(event, key))) continue;
       // A disabled command does not claim its key: it falls through to the editor or browser.
-      if (command.enabled && !command.enabled()) {
-        if (command.onDisabledKey?.() !== true) continue;
+      // One whose `enabled` throws counts as disabled, so a bad command cannot break every key.
+      let enabled: boolean;
+      try {
+        enabled = !command.enabled || command.enabled();
+      } catch (e) {
+        console.error(e);
+        enabled = false;
+      }
+      if (!enabled) {
+        let handled = false;
+        try {
+          handled = command.onDisabledKey?.() === true;
+        } catch (e) {
+          console.error(e);
+        }
+        if (!handled) continue;
         event.preventDefault();
         event.stopPropagation();
         return;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileData } from "../platform/platform";
-import { createDocumentsStore } from "./documents";
+import { createDocumentsStore, samePath } from "./documents";
 
 const data = (text: string): FileData => ({
   text,
@@ -123,5 +123,18 @@ describe("documents store", () => {
       store.getState().openFromFile("/a.md", data("x"), "markdown");
       expect(store.getState().documents[0]?.sourceMap).toBeUndefined();
     });
+  });
+});
+
+describe("opening the same file twice", () => {
+  it("treats case and slash style as the same path", () => {
+    expect(samePath("C:\\Docs\\A.md", "c:/docs/a.md")).toBe(true);
+    expect(samePath("C:\\Docs\\a.docx!/word/x.xml", "c:/docs/A.docx!/word/x.xml")).toBe(true);
+    expect(samePath("C:\\Docs\\a.md", "C:\\Docs\\b.md")).toBe(false);
+    const store = createDocumentsStore();
+    const first = store.getState().openFromFile("C:\\Docs\\A.md", data("x"), "markdown");
+    const second = store.getState().openFromFile("c:/docs/a.md", data("x"), "markdown");
+    expect(second).toBe(first);
+    expect(store.getState().documents).toHaveLength(1);
   });
 });

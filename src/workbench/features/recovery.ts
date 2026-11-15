@@ -1,3 +1,4 @@
+import { samePath } from "../../core/documents";
 import {
   describeSnapshot,
   diskIsNewer,
@@ -33,6 +34,8 @@ export const recovery: Feature = {
     const chains = new Map<string, Promise<void>>();
     let active = true;
     let warned = false;
+    /** The user has chosen to quit: nothing may write a snapshot of what they discarded. */
+    let quitting = false;
 
     const idFor = (docId: string) => {
       let id = ids.get(docId);
@@ -70,6 +73,7 @@ export const recovery: Feature = {
     }
 
     function flush(docId: string): Promise<void> {
+      if (quitting) return Promise.resolve();
       const doc = wb.documents.getState().documents.find((d) => d.id === docId);
       if (!doc || !wb.isDirty(docId)) return clear(docId);
       const snapshot: RecoverySnapshot = {
@@ -86,6 +90,7 @@ export const recovery: Feature = {
     }
 
     function schedule(docId: string, restart: boolean): void {
+      if (quitting) return;
       if (!restart && timers.has(docId)) return;
       cancel(docId);
       timers.set(
@@ -132,6 +137,10 @@ export const recovery: Feature = {
       }),
       // The user chose to quit (and, if there were unsaved changes, to discard them).
       wb.onBeforeQuit(async () => {
+        quitting = true;
+        // Edits from the last few seconds have a timer but no snapshot yet; stop those too.
+        for (const timer of timers.values()) clearTimeout(timer);
+        timers.clear();
         await Promise.all([...written].map((docId) => clear(docId)));
       }),
       () => {
@@ -274,7 +283,7 @@ async function restoreOne(
     id = store.openUntitled(provider.id);
   } else {
     const existing = store.documents.find(
-      (d) => d.path !== null && d.path.toLowerCase() === snapshot.path?.toLowerCase(),
+      (d) => d.path !== null && snapshot.path !== null && samePath(d.path, snapshot.path),
     );
     if (existing && wb.isDirty(existing.id)) {
       wb.notify({
