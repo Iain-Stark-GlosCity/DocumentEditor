@@ -20,6 +20,8 @@ const waiting = new Map<number, Waiting>();
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function stopWorker(failure?: Error): void {
+  if (idleTimer !== null) clearTimeout(idleTimer);
+  idleTimer = null;
   worker?.terminate();
   worker = null;
   const all = [...waiting.values()];
@@ -50,10 +52,14 @@ function start(): Worker | null {
       if (response.ok) entry.resolve(response.result);
       else entry.reject(new Error(response.message));
     };
-    created.onerror = () => {
+    const fail = (message: string) => {
+      if (worker !== created) return; // An earlier worker, already replaced.
       usable = false; // Do not keep retrying a worker that cannot run.
-      stopWorker(new Error("The Word file worker failed"));
+      stopWorker(new Error(message));
     };
+    created.onerror = () => fail("The Word file worker failed");
+    // A reply that cannot be read would otherwise leave its call waiting for ever.
+    created.onmessageerror = () => fail("The Word file worker sent a reply that could not be read");
     worker = created;
     return created;
   } catch {
@@ -74,7 +80,13 @@ export async function callDocx<K extends DocxOp>(
       const result = await new Promise<unknown>((resolve, reject) => {
         waiting.set(id, { resolve, reject });
         touch();
-        w.postMessage({ id, op, bytes, args } as unknown as WorkerRequest);
+        try {
+          w.postMessage({ id, op, bytes, args } as unknown as WorkerRequest);
+        } catch (error) {
+          // The request could not be sent (for example, arguments that cannot be cloned).
+          waiting.delete(id);
+          throw error;
+        }
       });
       return result as DocxOps[K]["result"];
     } catch (error) {

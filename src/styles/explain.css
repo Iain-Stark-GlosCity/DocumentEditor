@@ -154,3 +154,25 @@
 .binary-part-font-small {
   font-size: 12px;
 }
+
+.explain-fix-button[aria-disabled="true"] {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
+@media (forced-colors: active) {
+  .explain-fix-button {
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+
+  .explain-fix-button[aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+
+  .binary-part-preview,
+  .binary-part-font {
+    border-color: CanvasText;
+  }
+}

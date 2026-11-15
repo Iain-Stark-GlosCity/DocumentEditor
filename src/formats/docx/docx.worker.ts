@@ -20,13 +20,17 @@ const scope = self as unknown as {
 
 scope.onmessage = (event) => {
   const { id, op, bytes, args } = event.data;
-  runDocxOp(op, bytes, args).then(
-    (result) => scope.postMessage({ id, ok: true, result }),
-    (error: unknown) =>
-      scope.postMessage({
-        id,
-        ok: false,
-        message: error instanceof Error ? error.message : String(error),
-      }),
-  );
+  const fail = (error: unknown) =>
+    scope.postMessage({
+      id,
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  runDocxOp(op, bytes, args).then((result) => {
+    try {
+      scope.postMessage({ id, ok: true, result });
+    } catch (error) {
+      fail(error); // A result that cannot be cloned must still answer the call.
+    }
+  }, fail);
 };

@@ -658,6 +658,18 @@ export class Workbench {
    * Returns false only if the file could not be opened (which is notified).
    */
   async revealPart(path: string, locator?: string): Promise<boolean> {
+    return (await this.revealNow(path, locator)).opened;
+  }
+
+  /**
+   * `revealPart`, also saying which document it showed and the range it selected (null when no
+   * locator was given or the element was not found), so a caller can act on exactly that range.
+   */
+  private async revealNow(
+    path: string,
+    locator?: string,
+  ): Promise<{ opened: boolean; id: string | null; range: { from: number; to: number } | null }> {
+    const failed = { opened: false, id: null, range: null };
     const find = () => {
       const lower = path.toLowerCase();
       return this.documents.getState().documents.find((d) => d.path?.toLowerCase() === lower);
@@ -667,17 +679,17 @@ export class Workbench {
     else {
       await this.openPaths([path]);
       doc = find();
-      if (!doc) return false;
+      if (!doc) return failed;
       this.documents.getState().setActive(doc.id);
     }
     if (locator === undefined) {
       this.focusEditor();
-      return true;
+      return { opened: true, id: doc.id, range: null };
     }
     const id = doc.id;
     // React mounts the editor after the tab is activated, so wait for it to show this document.
     const view = await this.whenEditorShows(id);
-    if (!this.docById(id)) return true; // Closed while waiting.
+    if (!this.docById(id)) return { opened: true, id: null, range: null }; // Closed while waiting.
     const text = view ? view.state.doc.toString() : this.getText(id);
     const provider = this.registry.byId(doc.providerId);
     let range: { from: number; to: number } | null;
@@ -692,7 +704,7 @@ export class Workbench {
         message: `Could not find that element in ${doc.title} any more. The part may have been edited since the view was made.`,
       });
       view?.focus();
-      return true;
+      return { opened: true, id, range: null };
     }
     const selection = EditorSelection.range(range.from, range.to);
     if (view) {
@@ -707,21 +719,33 @@ export class Workbench {
       const state = this.getEditorState(id);
       if (state) this.buffers.set(id, state.update({ selection }).state);
     }
-    return true;
+    return { opened: true, id, range };
   }
 
   /**
    * Deletes the element a locator names from an open part, as an ordinary edit in its tab: the
    * document becomes unsaved, the change is undoable, and saving goes through the usual safe path.
-   * Returns false, changing nothing, if the element cannot be found or the editor is not showing.
+   * Returns false, changing nothing, if the element cannot be found, the editor is not showing, or
+   * the part's tab has unsaved edits (the locator describes the file on disk, so it could name a
+   * different element in the edited text).
    */
   async removePartElement(path: string, locator: string): Promise<boolean> {
-    if (!(await this.revealPart(path, locator))) return false;
+    const lower = path.toLowerCase();
+    const open = this.documents.getState().documents.find((d) => d.path?.toLowerCase() === lower);
+    if (open && this.isDirty(open.id)) {
+      this.notify({
+        kind: "warning",
+        message: `${open.title} has unsaved changes. Save or undo them, then make this repair again.`,
+      });
+      return false;
+    }
+    const { opened, id, range } = await this.revealNow(path, locator);
+    if (!opened || id === null || !range || range.from === range.to) return false;
     const view = this.view;
-    const doc = this.activeDocument();
-    if (!view || !doc || doc.path?.toLowerCase() !== path.toLowerCase()) return false;
+    // Only delete what was just revealed: never whatever happens to be selected.
+    if (!view || this.shownId !== id || this.documents.getState().activeId !== id) return false;
     const { from, to } = view.state.selection.main;
-    if (from === to) return false; // Not found: revealPart already said so.
+    if (from !== range.from || to !== range.to) return false;
     view.dispatch({ changes: { from, to, insert: "" }, userEvent: "delete.selection" });
     view.focus();
     return true;

@@ -233,3 +233,52 @@ describe("a silent refresh of the view", () => {
     expect(doc.sourceMap).toBeUndefined();
   });
 });
+
+describe("Workbench.removePartElement", () => {
+  const ONE = "/w:document/w:body/w:p[1]";
+
+  it("deletes exactly the located element, as an undoable edit that leaves the tab unsaved", async () => {
+    const { workbench } = await boot();
+    await expect(workbench.removePartElement(PART, ONE)).resolves.toBe(true);
+    const id = workbench.activeDocument()!.id;
+    expect(workbench.getText(id)).not.toContain("<w:p>One</w:p>");
+    expect(workbench.getText(id)).toContain("<w:p>Two <b>bold</b></w:p>");
+    expect(workbench.isDirty(id)).toBe(true);
+  });
+
+  it("does not delete the user's own selection when the locator no longer matches", async () => {
+    const { workbench, view } = await boot();
+    await workbench.revealPart(PART);
+    const id = workbench.activeDocument()!.id;
+    const before = workbench.getText(id)!;
+    // The user has a paragraph selected in the part's tab.
+    const from = before.indexOf("<w:p>Cell</w:p>");
+    view().dispatch({ selection: { anchor: from, head: from + 15 } });
+    await expect(workbench.removePartElement(PART, "/w:document/w:body/w:p[9]")).resolves.toBe(
+      false,
+    );
+    expect(workbench.getText(id)).toBe(before);
+    expect(messages(workbench).join("\n")).toContain("Could not find that element");
+  });
+
+  it("refuses, with a message, when the part's tab has unsaved edits", async () => {
+    const { workbench } = await boot();
+    await workbench.revealPart(PART);
+    const id = workbench.activeDocument()!.id;
+    workbench.replaceText(id, `<w:p>Typed</w:p>${workbench.getText(id)}`);
+    const edited = workbench.getText(id);
+    await expect(workbench.removePartElement(PART, ONE)).resolves.toBe(false);
+    expect(workbench.getText(id)).toBe(edited);
+    expect(messages(workbench).join("\n")).toContain("has unsaved changes");
+  });
+
+  it("returns false and changes nothing when the file cannot be opened or no editor shows", async () => {
+    const { workbench } = await boot({ attach: false });
+    workbench.nextFrame = (callback) => void setTimeout(callback, 16);
+    await expect(workbench.removePartElement("/c/missing.xml", ONE)).resolves.toBe(false);
+    const done = workbench.removePartElement(PART, ONE);
+    await settle(1200);
+    await expect(done).resolves.toBe(false);
+    expect(workbench.getText(workbench.activeDocument()!.id)).toBe(XML);
+  });
+});
