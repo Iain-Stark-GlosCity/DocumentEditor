@@ -9,6 +9,8 @@ import type { OpenDocument } from "../../core/documents";
 import type { Workbench } from "../workbench";
 
 export const RERUN_DELAY_MS = 1500;
+/** How soon a background check starts after a file opens with the pane hidden. */
+export const BACKGROUND_DELAY_MS = 500;
 
 export type IntegrityState =
   | { container: null; status: "idle"; findings: null }
@@ -58,6 +60,11 @@ export class IntegrityController {
     return this.wb.settings.get("integrity.visible");
   }
 
+  /** The pane is open, or the user lets files be checked in the background. */
+  private wantsChecks(): boolean {
+    return this.visible() || this.wb.settings.get("integrity.autoCheck");
+  }
+
   private clearTimer(): void {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
@@ -70,6 +77,7 @@ export class IntegrityController {
     this.stops = [
       wb.onDidChangeActiveDocument(sync),
       wb.settings.subscribe("integrity.visible", sync),
+      wb.settings.subscribe("integrity.autoCheck", sync),
       wb.onDidSave((event) => {
         if (this.state.container !== null && this.containerOf(event.path) === this.state.container)
           this.changed();
@@ -123,7 +131,20 @@ export class IntegrityController {
       this.set(container === null ? NONE : { container, status: "idle", findings: null });
     }
     this.watch(container);
-    if (container !== null && this.visible() && this.state.status === "idle") void this.run();
+    if (container !== null && this.state.status === "idle") {
+      if (this.visible()) void this.run();
+      // Hidden pane: still check, a moment after the file opens, so the status bar item can say
+      // what was found and invite the user to look. Without this nobody learns there is anything.
+      else if (this.wantsChecks()) this.later(BACKGROUND_DELAY_MS);
+    }
+  }
+
+  private later(delayMs: number): void {
+    this.clearTimer();
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.run();
+    }, delayMs);
   }
 
   /** A part was saved or the container changed on disk: check again soon, or when next shown. */
@@ -131,15 +152,12 @@ export class IntegrityController {
     const state = this.state;
     if (state.container === null) return;
     this.clearTimer();
-    if (!this.visible()) {
+    if (!this.wantsChecks()) {
       this.runId += 1;
       this.set({ container: state.container, status: "idle", findings: state.findings });
       return;
     }
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      void this.run();
-    }, RERUN_DELAY_MS);
+    this.later(RERUN_DELAY_MS);
   }
 
   /** Checks the active container now. A run still in flight is superseded. */

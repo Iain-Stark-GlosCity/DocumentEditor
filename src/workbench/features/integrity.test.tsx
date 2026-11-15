@@ -114,7 +114,7 @@ function inspectingFormat(fake: Fake): TextFormatProvider {
 
 async function setup(
   results: (Finding[] | Error)[] = [FINDINGS],
-  options: { visible?: boolean; gate?: Promise<void> } = {},
+  options: { visible?: boolean; gate?: Promise<void>; autoCheck?: boolean } = {},
 ) {
   const fake: Fake = { results, calls: [], gate: options.gate ?? null };
   const platform = new MemoryPlatform();
@@ -138,6 +138,7 @@ async function setup(
   await act(async () => {
     await workbench.ready;
     if (options.visible !== false) workbench.settings.set("integrity.visible", true);
+    if (options.autoCheck === false) workbench.settings.set("integrity.autoCheck", false);
     await workbench.openPaths([DOCX]);
   });
   return { fake, platform, workbench };
@@ -447,6 +448,30 @@ describe("the Integrity pane", () => {
       ),
     );
     expect(screen.queryByText("Report copied")).toBeNull();
+  });
+
+  it("checks in the background shortly after a file opens even with the pane hidden, so the status bar can report", async () => {
+    const { fake } = await setup([FINDINGS], { visible: false });
+    expect(screen.queryByRole("region", { name: "Integrity" })).toBeNull();
+    const status = await screen.findByRole(
+      "button",
+      { name: /Integrity: 2 errors, 1 warning, 2 notes/ },
+      { timeout: 3000 },
+    );
+    expect(status.textContent).toBe("Integrity: 2 errors, 1 warning, 2 notes");
+    expect(fake.calls).toEqual([{ path: DOCX }]);
+    // The pane stayed closed: the check was quiet.
+    expect(screen.queryByRole("region", { name: "Integrity" })).toBeNull();
+  });
+
+  it("does not check in the background when autoCheck is off, until the pane is opened", async () => {
+    const { fake, workbench } = await setup([FINDINGS], { visible: false, autoCheck: false });
+    await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 900))));
+    expect(fake.calls).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^Integrity/ })).toBeNull();
+    act(() => workbench.settings.set("integrity.visible", true));
+    await screen.findByRole("tree", { name: "Findings" });
+    expect(fake.calls).toHaveLength(1);
   });
 
   it("shows a status item that opens the pane", async () => {

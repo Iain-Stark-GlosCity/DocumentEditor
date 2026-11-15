@@ -75,6 +75,8 @@ export const SETTINGS_SCHEMA = {
   "parts.visible": bool(true),
   /** The Integrity pane. Off by default: the Parts pane is already shown on the left. */
   "integrity.visible": bool(false),
+  /** Check Word files in the background when they open, so the status bar can report. */
+  "integrity.autoCheck": bool(true),
   "ui.paneSizes": paneSizes(),
   /** The formatting ribbon between the menu bar and the tabs. */
   "ui.ribbon": bool(true),
