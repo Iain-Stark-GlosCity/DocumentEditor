@@ -101,6 +101,7 @@ export function App(props: AppProps) {
           message={dialog.message}
           actions={dialog.actions}
           cancelValue={dialog.cancelValue}
+          initialFocus={dialog.initialFocus}
           onChoose={(value) => workbench.resolveDialog(dialog.id, value)}
         />
       )}

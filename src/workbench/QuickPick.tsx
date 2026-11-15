@@ -60,6 +60,8 @@ export function QuickPick<T>({
         if (count) setIndex((active - 1 + count) % count);
         break;
       case "Enter": {
+        // Enter that confirms an input-method composition is not a choice.
+        if (event.nativeEvent.isComposing) return;
         const item = matches[active];
         if (item) onClose(item.value);
         break;
@@ -133,7 +135,9 @@ export function QuickPick<T>({
           ))}
         </ul>
         <p className="palette-status" role="status">
-          {matches.length === 0 ? (emptyMessage ?? "No matches") : `${matches.length} choices`}
+          {matches.length === 0
+            ? (emptyMessage ?? "No matches")
+            : `${matches.length} ${matches.length === 1 ? "choice" : "choices"}`}
         </p>
       </div>
     </div>

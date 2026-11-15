@@ -24,7 +24,8 @@ function SidePaneSlot({
 }) {
   const visible = pane.useVisible(workbench);
   const sizes = useSetting(workbench, "ui.paneSizes");
-  const size = sizes[pane.id] ?? pane.defaultSize ?? 40;
+  // A hand-edited settings file may hold a size that would hide the editor or the pane.
+  const size = clamp(sizes[pane.id] ?? pane.defaultSize ?? 40);
   const dragging = useRef(false);
   if (!visible) return null;
   const Content = pane.component;

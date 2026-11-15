@@ -90,8 +90,15 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
     setTopIndex(i);
     pending.current = focus;
     setSubOpen(null);
-    setOpenId(menus[i]?.id ?? null);
+    const id = menus[i]?.id ?? null;
+    setOpenId(id);
     if (focus === null) topRefs.current[i]?.focus();
+    else if (id !== null && id === openId) {
+      // Already open (it was opened with the mouse): no render follows to move focus in, so do it now.
+      pending.current = null;
+      const items = itemButtons();
+      (focus === "last" ? items[items.length - 1] : items[0])?.focus();
+    }
   }
 
   function itemButtons(): HTMLButtonElement[] {
@@ -152,7 +159,7 @@ export function MenuBar({ workbench }: { workbench: Workbench }) {
     const up = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Alt" && armed) {
         const ui = workbench.ui.getState();
-        if (ui.dialogs.length === 0 && !ui.paletteOpen) {
+        if (ui.dialogs.length === 0 && !ui.paletteOpen && ui.pick === null) {
           e.preventDefault();
           void workbench.runCommand("view.focusMenuBar");
         }

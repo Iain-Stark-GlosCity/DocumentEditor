@@ -154,14 +154,20 @@ button {
 
 .tab-close {
   align-self: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin: 0 6px 0 2px;
   padding: 0;
   color: var(--fg-muted);
   font-size: 16px;
   line-height: 1;
   border-radius: var(--radius-sm);
+}
+
+/* The strip scrolls, so a ring outside the tab would be clipped along its bottom edge. */
+.tab:focus-visible,
+.tab-close:focus-visible {
+  outline-offset: -2px;
 }
 
 .tab-close:hover {

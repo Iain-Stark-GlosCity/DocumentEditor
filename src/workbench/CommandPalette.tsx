@@ -65,6 +65,8 @@ function PaletteDialog({ workbench }: { workbench: Workbench }) {
         if (count) setIndex((active - 1 + count) % count);
         break;
       case "Enter": {
+        // Enter that confirms an input-method composition is not a choice.
+        if (event.nativeEvent.isComposing) break;
         event.preventDefault();
         const command = matches[active];
         if (command) run(command);
@@ -138,7 +140,9 @@ function PaletteDialog({ workbench }: { workbench: Workbench }) {
           ))}
         </ul>
         <p className="palette-status" role="status">
-          {matches.length === 0 ? "No matching commands" : `${matches.length} commands`}
+          {matches.length === 0
+            ? "No matching commands"
+            : `${matches.length} ${matches.length === 1 ? "command" : "commands"}`}
         </p>
       </div>
     </div>

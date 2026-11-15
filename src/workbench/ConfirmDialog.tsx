@@ -11,14 +11,21 @@ export function ConfirmDialog({
   message,
   actions,
   cancelValue,
+  initialFocus,
   onChoose,
 }: ConfirmDialogProps) {
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    root.current?.querySelector<HTMLElement>("button")?.focus();
+    const buttons = [...(root.current?.querySelectorAll<HTMLElement>("button") ?? [])];
+    // A dialog whose first action destroys something names the safe one to start on.
+    const start =
+      initialFocus === undefined ? undefined : actions.findIndex((a) => a.value === initialFocus);
+    buttons[start !== undefined && start >= 0 ? start : 0]?.focus();
     return () => previous?.focus();
+    // Focus is placed once, when the dialog appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -33,7 +40,11 @@ export function ConfirmDialog({
     const first = buttons[0];
     const last = buttons[buttons.length - 1];
     if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
+    // Focus that has strayed out of the buttons (a click on the text) comes back in.
+    if (!buttons.includes(document.activeElement as HTMLElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
