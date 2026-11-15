@@ -19,7 +19,7 @@ import { Package, type PartSource } from "./package";
 import { Styles } from "./styles";
 import { child, locatorOf, type XElement } from "./xml";
 
-interface Layer {
+export interface Layer {
   source: ExplanationSource;
   /** The `w:pPr` this layer contributes (a style's, a list level's, the paragraph's own). */
   pPr: XElement | undefined;
@@ -190,32 +190,21 @@ export function findByLocator(root: XElement | null, locator: string): XElement 
   return cur;
 }
 
-export function explainParagraph(
-  source: PartSource,
-  part: string,
-  locator: string,
-): Explanation | null {
-  const pkg = new Package(source);
-  const p = findByLocator(pkg.xml(part)?.root ?? null, locator);
-  if (!p || p.name !== "w:p") return null;
+export interface ParagraphStack {
+  direct: XElement | undefined;
+  styleId: string | undefined;
+  list: { numId: string; ilvl: number; fromStyle: boolean } | undefined;
+  listLayer: Layer | undefined;
+  /** Layers weakest first, in the order we believe Word applies them. */
+  main_: Layer[];
+  /** The same with the list level and style swapped, when that order is uncertain. */
+  alt: Layer[] | undefined;
+}
 
-  const main = pkg.mainPart;
-  const stylesPart = pkg.related(main, "styles") ?? "word/styles.xml";
-  const numberingPart = pkg.related(main, "numbering") ?? "word/numbering.xml";
-  const styles = new Styles(pkg.xml(stylesPart)?.root);
-  const numbering = new Numbering(pkg.xml(numberingPart)?.root, styles);
-
-  const partOf = (el: XElement): string => {
-    let top: XElement = el;
-    while (top.parent) top = top.parent;
-    if (top === pkg.xml(stylesPart)?.root) return stylesPart;
-    if (top === pkg.xml(numberingPart)?.root) return numberingPart;
-    return part;
-  };
-
+/** The layers that format a paragraph (see the file comment). */
+export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering): ParagraphStack {
   const direct = child(p, "w:pPr");
   const styleId = child(direct, "w:pStyle")?.attrs["w:val"] ?? styles.defaults.paragraph;
-  const notes: string[] = [];
 
   const layers: Layer[] = [{ source: { label: "Document defaults" }, pPr: styles.docDefaultsP }];
   const styleLayers: Layer[] = styleId
@@ -249,8 +238,7 @@ export function explainParagraph(
         source: { label: `List level ${list.ilvl + 1} (list ${list.numId})` },
         pPr: child(level.el, "w:pPr"),
       };
-    } else
-      notes.push(`The list this paragraph uses (${list.numId}) has no definition for its level.`);
+    }
   }
 
   const directLayer: Layer = { source: { label: "Direct formatting" }, pPr: direct };
@@ -264,6 +252,38 @@ export function explainParagraph(
   // A list from direct formatting sits above the style; one from the style is uncertain.
   const main_ = order(listLayer !== undefined && list!.fromStyle);
   const alt = listLayer && list!.fromStyle ? order(false) : undefined;
+
+  return { direct, styleId, list, listLayer, main_, alt };
+}
+
+export function explainParagraph(
+  source: PartSource,
+  part: string,
+  locator: string,
+): Explanation | null {
+  const pkg = new Package(source);
+  const p = findByLocator(pkg.xml(part)?.root ?? null, locator);
+  if (!p || p.name !== "w:p") return null;
+
+  const main = pkg.mainPart;
+  const stylesPart = pkg.related(main, "styles") ?? "word/styles.xml";
+  const numberingPart = pkg.related(main, "numbering") ?? "word/numbering.xml";
+  const styles = new Styles(pkg.xml(stylesPart)?.root);
+  const numbering = new Numbering(pkg.xml(numberingPart)?.root, styles);
+
+  const partOf = (el: XElement): string => {
+    let top: XElement = el;
+    while (top.parent) top = top.parent;
+    if (top === pkg.xml(stylesPart)?.root) return stylesPart;
+    if (top === pkg.xml(numberingPart)?.root) return numberingPart;
+    return part;
+  };
+
+  const stack = paragraphStack(p, styles, numbering);
+  const { direct, styleId, list, listLayer, main_, alt } = stack;
+  const notes: string[] = [];
+  if (list && !listLayer)
+    notes.push(`The list this paragraph uses (${list.numId}) has no definition for its level.`);
 
   const sections: ExplanationSection[] = (["Indentation", "Spacing", "Alignment"] as const).map(
     (group) => ({
@@ -313,4 +333,25 @@ export function explainParagraph(
   notes.push("Text-box and conditional table formatting are not included.");
 
   return { title: "Paragraph formatting", sections, notes };
+}
+
+/** The effective left or right indent in twips, and the layer that set it. */
+export function effectiveIndent(
+  stack: ParagraphStack,
+  side: "left" | "right",
+): { twips: number; layer: string } | undefined {
+  const names = side === "left" ? ["w:left", "w:start"] : ["w:right", "w:end"];
+  let out: { twips: number; layer: string } | undefined;
+  for (const layer of stack.main_) {
+    const ind = child(layer.pPr, "w:ind");
+    if (!ind) continue;
+    for (const name of names) {
+      const n = Number(ind.attrs[name]);
+      if (ind.attrs[name] !== undefined && Number.isFinite(n)) {
+        out = { twips: n, layer: layer.source.label };
+        break;
+      }
+    }
+  }
+  return out;
 }

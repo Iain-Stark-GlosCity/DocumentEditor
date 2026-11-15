@@ -13,6 +13,7 @@ import type { PartSource } from "../package";
 import { InspectContext } from "./context";
 import type { Rule } from "./rule";
 import { formattingRules } from "./rules-formatting";
+import { paragraphRules } from "./rules-paragraphs";
 import { numberingRules } from "./rules-numbering";
 import { packageRules, wellFormedRule } from "./rules-package";
 import { revisionRules } from "./rules-revisions";
@@ -28,6 +29,7 @@ export const RULES: readonly Rule[] = [
   ...numberingRules,
   ...sectionRules,
   ...formattingRules,
+  ...paragraphRules,
   ...revisionRules,
   wellFormedRule,
 ];

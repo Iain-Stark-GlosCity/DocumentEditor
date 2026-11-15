@@ -779,6 +779,27 @@ export const MUTATIONS: Mutation[] = [
         `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="0"/><w:ind w:left="360"/><w:keepNext/><w:keepLines/><w:shd w:val="clear" w:fill="EEEEEE"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:i/><w:color w:val="333333"/><w:sz w:val="23"/><w:u w:val="single"/><w:caps/></w:rPr><w:t>Loud</w:t></w:r></w:p>`,
       ),
   },
+  {
+    name: "list item nudged by hand",
+    rule: "formatting.indent-overrides-list",
+    severity: "info",
+    part: DOC,
+    element: "w:p",
+    apply: (p) =>
+      addToBody(
+        p,
+        `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr><w:ind w:left="3333" w:hanging="111"/></w:pPr><w:r><w:t>Nudged</w:t></w:r></w:p>`,
+      ),
+  },
+  {
+    name: "paragraph pushed into the margin",
+    rule: "formatting.extreme-indent",
+    severity: "warning",
+    part: DOC,
+    element: "w:p",
+    apply: (p) =>
+      addToBody(p, `<w:p><w:pPr><w:ind w:left="-900"/></w:pPr><w:r><w:t>Outside</w:t></w:r></w:p>`),
+  },
   // revisions and notes
   {
     name: "tracked insertion and deletion",

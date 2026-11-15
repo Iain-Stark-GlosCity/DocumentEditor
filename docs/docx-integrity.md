@@ -554,6 +554,29 @@ Text you cannot see, markers that do not pair up, and paragraphs buried in direc
   size (counted once); font hints.
 - **Example:** a centred, shaded, indented paragraph in bold italic underlined Arial capitals.
 
+### `formatting.indent-overrides-list`
+
+- **Severity:** info
+- **Checks:** in the main body, list paragraphs (the list comes from the paragraph or its style)
+  whose own `w:ind` sets a left indent, hanging or first-line value different from the list
+  level's. Paragraphs are resolved with the same layers as Explain this paragraph.
+- **Why:** the list level decides where the number and text sit; a direct indent moves one item
+  out of line with the rest, usually from nudging it by hand.
+- **Does not flag:** a direct indent equal to the level's; list paragraphs with no indent of their
+  own; a list whose level is not defined (reported by the numbering rules).
+- **Example:** one bullet in a list with `w:ind w:left="1440"` where the level says 720.
+
+### `formatting.extreme-indent`
+
+- **Severity:** warning
+- **Checks:** in the main body, outside tables, paragraphs whose effective left or right indent is
+  negative, or whose left plus right indent reaches 80% of the last section's text width (page
+  width minus left and right margins).
+- **Why:** the text is pushed into the margin or squeezed into a narrow column.
+- **Does not flag:** paragraphs in tables (cell widths are not resolved); anything when the last
+  section states no page width. Sections other than the last are not used for the width.
+- **Example:** a paragraph with `w:ind w:left="9000"` on an A4 page with 1-inch margins.
+
 ---
 
 ## Revisions
