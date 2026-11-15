@@ -1,4 +1,5 @@
-import { strFromU8, unzipSync } from "fflate";
+import { readFileSync } from "node:fs";
+import { strFromU8, unzipSync, zipSync } from "fflate";
 import { Document, ImageRun, Packer, Paragraph, TextRun } from "docx";
 import type { Page } from "@playwright/test";
 import { documentText, expect, test } from "./fixtures";
@@ -152,6 +153,31 @@ test("a picture inside a Word file can be previewed and saved as a copy", async 
     )
     .toEqual(Array.from(png));
 
+  await app.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
+test("an embedded, obfuscated font can be previewed", async ({ app }) => {
+  const guid = "{00112233-4455-6677-8899-AABBCCDDEEFF}";
+  const font = new Uint8Array(readFileSync("node_modules/katex/dist/fonts/KaTeX_Main-Regular.ttf"));
+  // Word's obfuscation: XOR the first 32 bytes with the GUID's bytes, last pair first.
+  const hex = guid.replace(/[{}-]/g, "");
+  const key = Array.from({ length: 16 }, (_, i) => parseInt(hex.slice(30 - i * 2, 32 - i * 2), 16));
+  const hidden = font.slice();
+  for (let i = 0; i < 32; i++) hidden[i] = (hidden[i] ?? 0) ^ (key[i % 16] ?? 0);
+
+  const parts = unzipSync(await makeDocx());
+  parts[`word/fonts/${guid}.odttf`] = hidden;
+  await openDocx(app, "explain.docx", zipSync(parts));
+
+  await app.getByRole("treeitem", { name: /odttf/ }).click();
+  const dialog = app.getByRole("dialog", { name: new RegExp(guid.slice(1, 9), "i") });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("img", { name: /Sample text in/ })).toBeVisible();
+  const family = await dialog
+    .getByRole("img", { name: /Sample text in/ })
+    .evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(family).toContain("part-preview-");
   await app.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });

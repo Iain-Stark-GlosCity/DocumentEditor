@@ -132,3 +132,25 @@
   max-width: 100%;
   height: auto;
 }
+
+.binary-part-font {
+  max-height: 50vh;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  overflow: auto;
+  background: var(--bg-chrome);
+  border: 1px solid var(--border);
+}
+
+.binary-part-font p {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.binary-part-font-name {
+  font-size: 24px;
+}
+
+.binary-part-font-small {
+  font-size: 12px;
+}

@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { joinContainerPath } from "../../core/container-path";
 import type { Feature, FeatureComponentProps } from "../feature";
+import { FONT_EXTENSIONS, loadFontPreview } from "./font-preview";
 import type { Workbench } from "../workbench";
 
 /** Pictures larger than this are described but not previewed. */
@@ -125,6 +126,7 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
   );
   const root = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<string>("");
+  const [font, setFont] = useState<{ part: string; family: string | null } | null>(null);
 
   useEffect(() => {
     if (!info) return;
@@ -133,7 +135,27 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
     return () => previous?.focus();
   }, [info]);
 
+  useEffect(() => {
+    if (!info || !FONT_EXTENSIONS.includes(extensionOf(info.name))) return;
+    let live = true;
+    let release: (() => void) | undefined;
+    void loadFontPreview(info.name, info.bytes).then((preview) => {
+      if (!live) {
+        preview?.release();
+        return;
+      }
+      release = preview?.release;
+      setFont({ part: info.part, family: preview?.family ?? null });
+    });
+    return () => {
+      live = false;
+      release?.();
+    };
+  }, [info]);
+
   if (!info) return null;
+  const isFont = FONT_EXTENSIONS.includes(extensionOf(info.name));
+  const fontFamily = font?.part === info.part ? font.family : null;
   const close = () => {
     setDimensions("");
     set(null);
@@ -189,8 +211,25 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
               }
             />
           </div>
+        ) : isFont && fontFamily ? (
+          <div
+            className="binary-part-font"
+            role="img"
+            aria-label={`Sample text in ${info.name}`}
+            style={{ fontFamily: `"${fontFamily}", sans-serif` }}
+          >
+            <p className="binary-part-font-name">The quick brown fox jumps over the lazy dog</p>
+            <p>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p>
+            <p>abcdefghijklmnopqrstuvwxyz 0123456789 .,;:!?&amp;@£€%</p>
+            <p className="binary-part-font-small">
+              Pack my box with five dozen liquor jugs. 1234567890
+            </p>
+          </div>
         ) : (
           <p>
+            {isFont && font?.part === info.part
+              ? "This font could not be read, so it cannot be previewed. "
+              : ""}
             {IMAGE_TYPES[extensionOf(info.name)]
               ? "This picture is too large to preview here."
               : "This part cannot be shown as text or as a picture."}{" "}
