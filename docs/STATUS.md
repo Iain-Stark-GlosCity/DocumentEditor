@@ -21,7 +21,8 @@ Snapshot of where the project stands (15 Nov 2026). Update this file whenever a 
 - Explain this paragraph (Ctrl+Alt+E): effective indent, spacing and alignment of the paragraph at
   the cursor, the layer that decided each value, what it overrode, and a jump to that layer's XML.
   Covers document defaults, list level, style chain and direct formatting; table styles and
-  character-unit indents are noted, not resolved. List-from-style precedence is flagged uncertain. One repair: remove the paragraph's own indent
+  character-unit indents are noted, not resolved. List-from-style precedence is flagged uncertain.
+  Three repairs: remove the paragraph's own indent, spacing or alignment
   (an edit in the XML tab, undoable, saved through the verified path).
 - Two resolver-based integrity rules: `formatting.indent-overrides-list` (info) and
   `formatting.extreme-indent` (warning).

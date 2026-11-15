@@ -96,3 +96,20 @@ test("reading a Word file happens in a Web Worker, not on the page's thread", as
   await started;
   await expect(app.locator(".cm-content")).toContainText("Indented paragraph");
 });
+
+test("the spacing repair removes the paragraph's own spacing as an undoable edit", async ({
+  app,
+}) => {
+  await openDocx(app, "explain.docx", await makeDocx());
+  await app.locator(".cm-content").getByText("Indented paragraph").first().click();
+  await app.keyboard.press("Control+Alt+e");
+  const pane = app.getByRole("region", { name: "Explain this paragraph" });
+  await pane
+    .getByRole("group", { name: "Space after" })
+    .getByRole("button", { name: "Remove this paragraph's own spacing" })
+    .click();
+  await expect.poll(() => documentText(app)).not.toContain("<w:spacing");
+  expect(await documentText(app)).toContain("<w:ind");
+  await app.keyboard.press("Control+z");
+  await expect.poll(() => documentText(app)).toContain("<w:spacing");
+});

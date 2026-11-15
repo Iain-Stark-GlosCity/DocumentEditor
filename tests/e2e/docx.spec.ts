@@ -203,6 +203,8 @@ test("Reveal in source XML jumps from a line of the view to that element in the 
 
   // On a line with no source (the legend at the top) the command does nothing.
   await viewTab.click();
+  await expect(viewTab).toHaveAttribute("aria-selected", "true");
+  await expect(editor(app)).toContainText("Quarterly report");
   await app.locator(".cm-line").first().click();
   await app.keyboard.press("Control+Alt+x");
   await expect(viewTab).toHaveAttribute("aria-selected", "true");

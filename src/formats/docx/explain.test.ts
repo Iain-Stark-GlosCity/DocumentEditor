@@ -98,6 +98,20 @@ describe("explainParagraph", () => {
     expect(fix?.part).toBe("word/document.xml");
     expect(fix?.locator).toBe("/w:document/w:body/w:p/w:pPr/w:ind");
     expect(rowOf(own, "Space after").fix).toBeUndefined();
+    const spaced = explain(
+      '<w:p><w:pPr><w:spacing w:after="0"/><w:jc w:val="center"/></w:pPr></w:p>',
+    );
+    expect(rowOf(spaced, "Space after").fix?.locator).toBe(
+      "/w:document/w:body/w:p/w:pPr/w:spacing",
+    );
+    expect(rowOf(spaced, "Space after").fix?.label).toBe("Remove this paragraph's own spacing");
+    expect(rowOf(spaced, "Alignment").fix?.locator).toBe("/w:document/w:body/w:p/w:pPr/w:jc");
+    // The repair is offered once for an element, on its first row.
+    const both = explain('<w:p><w:pPr><w:spacing w:before="10" w:after="0"/></w:pPr></w:p>');
+    expect(rowOf(both, "Space before").fix).toBeDefined();
+    expect(rowOf(both, "Space after").fix).toBeUndefined();
+    // Line spacing comes from the defaults here, so no repair is offered for it.
+    expect(rowOf(spaced, "Line spacing").fix).toBeUndefined();
     const styled = explain('<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr></w:p>');
     expect(rowOf(styled, "Left indent").fix).toBeUndefined();
   });

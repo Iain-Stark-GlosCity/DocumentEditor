@@ -190,14 +190,32 @@ export function findByLocator(root: XElement | null, locator: string): XElement 
   return cur;
 }
 
-/** Offers to delete the paragraph's own `w:ind` when it is what decides an indentation row. */
+const FIXES: Record<string, { element: string; label: string; what: string }> = {
+  Indentation: {
+    element: "w:ind",
+    label: "Remove this paragraph's own indent",
+    what: "the w:ind element (left, right and first-line indents)",
+  },
+  Spacing: {
+    element: "w:spacing",
+    label: "Remove this paragraph's own spacing",
+    what: "the w:spacing element (space before, space after and line spacing)",
+  },
+  Alignment: {
+    element: "w:jc",
+    label: "Remove this paragraph's own alignment",
+    what: "the w:jc element (alignment)",
+  },
+};
+
+/** Offers to delete the paragraph's own element when it is what decides a row. */
 function withFix(row: ExplanationRow, group: string): ExplanationRow {
   const src = row.source;
-  if (group === "Indentation" && src?.label === "Direct formatting" && src.part && src.locator)
+  const fix = FIXES[group];
+  if (fix && src?.label === "Direct formatting" && src.part && src.locator?.endsWith(fix.element))
     row.fix = {
-      label: "Remove this paragraph's own indent",
-      detail:
-        "Deletes the w:ind element from the paragraph so the style or list decides again. The edit appears in the XML tab: undo with Ctrl+Z, or save with Ctrl+S (a backup of the file is kept).",
+      label: fix.label,
+      detail: `Deletes ${fix.what} from the paragraph so the style or list decides again. The edit appears in the XML tab: undo with Ctrl+Z, or save with Ctrl+S (a backup of the file is kept).`,
       part: src.part,
       locator: src.locator,
     };
@@ -314,6 +332,16 @@ export function explainParagraph(
       ),
     }),
   );
+
+  // Rows that share an element (before, after and line spacing) offer its repair once, on the first.
+  const offered = new Set<string>();
+  for (const section of sections)
+    for (const r of section.rows) {
+      if (!r.fix) continue;
+      const key = `${r.fix.part}\u0000${r.fix.locator}`;
+      if (offered.has(key)) delete r.fix;
+      else offered.add(key);
+    }
 
   if (list) {
     const label = listLayer
