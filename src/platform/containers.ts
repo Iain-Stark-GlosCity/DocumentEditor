@@ -351,11 +351,62 @@ export class ContainerPlatform implements Platform {
     return this.inner.writeFile(path, text, format);
   }
 
+  /** Saves a text part: the text is encoded, and XML parts must be well-formed. */
   private writePart(
     container: string,
     part: string,
     text: string,
     format: FileFormat,
+  ): Promise<{ modifiedMs: number }> {
+    return this.patchPart(container, part, () => {
+      if (!isTextPart(part)) {
+        throw new Error(`${part} is a binary part and cannot be saved as text`);
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = encodePartText(text, format);
+      } catch (error) {
+        throw new Error(`Could not save ${part}: ${describe(error)}. Nothing was saved.`, {
+          cause: error,
+        });
+      }
+      if (XML_EXTENSIONS.has(partExtension(part))) {
+        const problem = xmlProblem(text);
+        if (problem) {
+          throw new Error(`${part} is not well-formed XML (${problem}). Nothing was saved.`);
+        }
+      }
+      return bytes;
+    });
+  }
+
+  /**
+   * Replaces a binary part (a picture, say) with new bytes. Only an existing binary part can be
+   * replaced, and it goes through exactly the same checks as a text part.
+   */
+  private writeBinaryPart(
+    container: string,
+    part: string,
+    bytes: Uint8Array,
+  ): Promise<{ modifiedMs: number }> {
+    return this.patchPart(container, part, () => {
+      if (isTextPart(part)) {
+        throw new Error(`${part} is a text part and is saved as text`);
+      }
+      if (bytes.length === 0) throw new Error(`Refusing to replace ${part} with an empty file`);
+      return bytes;
+    });
+  }
+
+  /**
+   * The safe save for one part: a fresh read of the container, the new bytes from `produce`
+   * (which may refuse), a surgical patch, a self-check, a re-check that the file has not changed,
+   * a one-off backup and an atomic write. Writes to one container are serialised.
+   */
+  private patchPart(
+    container: string,
+    part: string,
+    produce: () => Uint8Array,
   ): Promise<{ modifiedMs: number }> {
     const file = baseName(container);
     return this.serialised(container, async () => {
@@ -385,24 +436,7 @@ export class ContainerPlatform implements Platform {
       if (!info || info.isDirectory) {
         throw new Error(`There is no part "${part}" in ${file}, and adding parts is not supported`);
       }
-      if (!isTextPart(part)) {
-        throw new Error(`${part} is a binary part and cannot be saved as text`);
-      }
-
-      let bytes: Uint8Array;
-      try {
-        bytes = encodePartText(text, format);
-      } catch (error) {
-        throw new Error(`Could not save ${part}: ${describe(error)}. Nothing was saved.`, {
-          cause: error,
-        });
-      }
-      if (XML_EXTENSIONS.has(partExtension(part))) {
-        const problem = xmlProblem(text);
-        if (problem) {
-          throw new Error(`${part} is not well-formed XML (${problem}). Nothing was saved.`);
-        }
-      }
+      const bytes = produce();
 
       let patched: Uint8Array;
       try {
@@ -461,7 +495,18 @@ export class ContainerPlatform implements Platform {
   // Written out one by one on purpose: a new method on `Platform` fails to compile here until
   // someone decides what it means for containers.
 
-  writeBinaryFile(path: string, bytes: Uint8Array, options: { overwrite: boolean }): Promise<void> {
+  async writeBinaryFile(
+    path: string,
+    bytes: Uint8Array,
+    options: { overwrite: boolean },
+  ): Promise<void> {
+    const split = this.partOf(path);
+    if (split) {
+      // Only a replacement of an existing binary part: adding parts is not supported.
+      if (!options.overwrite) throw new FileExistsError(path);
+      await this.writeBinaryPart(split.container, split.part, bytes);
+      return;
+    }
     return this.inner.writeBinaryFile(path, bytes, options);
   }
 

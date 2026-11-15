@@ -42,9 +42,23 @@ export interface ExplanationSection {
   rows: ExplanationRow[];
 }
 
+/** A picture inside the explained item. */
+export interface ExplanationPicture {
+  /** The picture's part inside the file, for example `word/media/image1.png`. */
+  part: string;
+  /** Its name, if it has one. */
+  name: string;
+  /** Its alternative text, or "" if none was written. */
+  alt: string;
+  /** How big it is drawn, for example `5.08 × 2.54 cm`. */
+  size: string;
+}
+
 export interface Explanation {
   title: string;
   sections: ExplanationSection[];
+  /** Pictures in the item, if it has any. */
+  pictures?: ExplanationPicture[];
   /** Things the resolver does not cover for this item, in plain words. */
   notes: string[];
 }

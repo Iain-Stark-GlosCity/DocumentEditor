@@ -11,6 +11,7 @@ import type { Explanation, ExplanationRow, ExplanationSource } from "../../core/
 import type { Feature, FeatureComponentProps } from "../feature";
 import { useActiveDocument, useActiveEditorState, useSetting } from "../hooks";
 import type { Workbench } from "../workbench";
+import { showBinaryPart } from "./binary-part";
 import { sourceAtCursor } from "./reveal-source";
 
 export const EXPLAIN_DELAY_MS = 200;
@@ -176,6 +177,29 @@ function ExplainPanel({ workbench, container }: FeatureComponentProps & { contai
               </dl>
             </div>
           ))}
+          {result.explanation.pictures && result.explanation.pictures.length > 0 && (
+            <div>
+              <h3>Pictures</h3>
+              <ul className="explain-pictures">
+                {result.explanation.pictures.map((picture) => (
+                  <li key={picture.part}>
+                    <span className="explain-value">{picture.name || picture.part}</span>
+                    {picture.size && <span>, {picture.size}</span>}
+                    <p className="explain-note">
+                      {picture.alt ? `Alt text: ${picture.alt}` : "No alt text is written."}
+                    </p>
+                    <button
+                      type="button"
+                      className="explain-fix-button"
+                      onClick={() => void showBinaryPart(workbench, container, picture.part)}
+                    >
+                      Show picture
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {result.explanation.notes.length > 0 && (
             <ul className="explain-notes">
               {result.explanation.notes.map((note) => (

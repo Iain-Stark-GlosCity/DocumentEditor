@@ -176,3 +176,14 @@
     border-color: CanvasText;
   }
 }
+
+.explain-pictures {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explain-pictures li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}

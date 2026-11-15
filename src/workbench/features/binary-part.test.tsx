@@ -7,6 +7,7 @@ import {
   describeSize,
   extensionOf,
   showBinaryPart,
+  sniffPicture,
 } from "./binary-part";
 
 const MEDIA = `${DOCX}!/word/media`;
@@ -334,5 +335,19 @@ describe("the binary part dialog", () => {
       expect(await screen.findByRole("img", { name: "Sample text in f.ttf" })).toBeTruthy();
       expect(fonts.added.size).toBe(1);
     });
+  });
+});
+
+describe("sniffPicture", () => {
+  const ascii = (t: string) => Uint8Array.from([...t].map((c) => c.charCodeAt(0)));
+  it("names the supported picture types by their first bytes only", () => {
+    expect(sniffPicture(PNG)).toBe("png");
+    expect(sniffPicture(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0]))).toBe("jpeg");
+    expect(sniffPicture(ascii("GIF89a...."))).toBe("gif");
+    expect(sniffPicture(ascii("BM" + "x".repeat(20)))).toBe("bmp");
+    expect(sniffPicture(ascii("RIFF....WEBPVP8 "))).toBe("webp");
+    expect(sniffPicture(ascii("<svg xmlns='x'/>"))).toBeNull();
+    expect(sniffPicture(new Uint8Array(3))).toBeNull();
+    expect(sniffPicture(TTF)).toBeNull();
   });
 });

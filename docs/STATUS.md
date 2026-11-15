@@ -26,6 +26,9 @@ Snapshot of where the project stands (15 Nov 2026). Update this file whenever a 
   (an edit in the XML tab, undoable, saved through the verified path).
 - Two resolver-based integrity rules: `formatting.indent-overrides-list` (info) and
   `formatting.extreme-indent` (warning).
+- Pictures in Word files: the Explain pane lists a paragraph's pictures (name, alt text, drawn size)
+  and opens the viewer; "Replace picture…" swaps the picture inside the file with one of the same
+  type through the verified save path (confirmation first, backup kept, not undoable in the editor).
 - Find widget, command palette, autosave, crash recovery with format kept, external-change
   detection, themes, zen mode, spellcheck, word count, split-pane layouts.
 

@@ -265,6 +265,45 @@ describe("watching", () => {
   });
 });
 
+describe("replacing a binary part", () => {
+  const NEW_PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+
+  it("replaces a picture, leaves every other entry byte for byte, and backs up once", async () => {
+    const before = disk();
+    await platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, { overwrite: true });
+    const now = readZip(disk());
+    const old = readZip(before);
+    expect(now.bytes("word/media/image1.png")).toEqual(NEW_PNG);
+    expect(now.entries.map((e) => e.name)).toEqual(old.entries.map((e) => e.name));
+    for (const entry of old.entries) {
+      if (entry.name === "word/media/image1.png" || entry.isDirectory) continue;
+      expect(now.bytes(entry.name)).toEqual(old.bytes(entry.name));
+    }
+    expect(disk(`${CONTAINER}.bak`)).toEqual(before);
+    // The part's own version token moves; reading it back gives the new bytes.
+    expect((await platform.readBinaryFile(part("word/media/image1.png"))).bytes).toEqual(NEW_PNG);
+  });
+
+  it("refuses to add a part, to replace a text part this way, to write an empty file, or without overwrite", async () => {
+    const before = disk();
+    await expect(
+      platform.writeBinaryFile(part("word/media/new.png"), NEW_PNG, { overwrite: true }),
+    ).rejects.toThrow(/no part/);
+    await expect(
+      platform.writeBinaryFile(part("word/styles.xml"), NEW_PNG, { overwrite: true }),
+    ).rejects.toThrow(/text part/);
+    await expect(
+      platform.writeBinaryFile(part("word/media/image1.png"), new Uint8Array(), {
+        overwrite: true,
+      }),
+    ).rejects.toThrow(/empty/);
+    await expect(
+      platform.writeBinaryFile(part("word/media/image1.png"), NEW_PNG, { overwrite: false }),
+    ).rejects.toThrow();
+    expect(disk()).toEqual(before);
+  });
+});
+
 describe("saving a part", () => {
   const EDITED = `<w:document xmlns:w="urn:w"><w:body>Edited</w:body></w:document>`;
 
@@ -612,10 +651,14 @@ describe("saving under concurrency and interference", () => {
     return new Proxy(memory, {
       get(target, prop) {
         if (prop === "statFile") {
-          return async (path: string) => ((await target.statFile(path)) ? { modifiedMs: 1000 } : null);
+          return async (path: string) =>
+            (await target.statFile(path)) ? { modifiedMs: 1000 } : null;
         }
         if (prop === "readBinaryFile") {
-          return async (path: string) => ({ ...(await target.readBinaryFile(path)), modifiedMs: 1000 });
+          return async (path: string) => ({
+            ...(await target.readBinaryFile(path)),
+            modifiedMs: 1000,
+          });
         }
         const value: unknown = Reflect.get(target, prop);
         return typeof value === "function" ? value.bind(target) : value;

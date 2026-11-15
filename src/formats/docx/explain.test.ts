@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeTwips, explainParagraph, findByLocator, parseTwips } from "./explain";
+import { ANCHORED_PICTURE } from "./hand-samples";
 import { handDocx, sourceFromParts } from "./test-helpers";
 import { explainDocxBytes } from "./explain-bytes";
 import { parseXml } from "./xml";
@@ -243,5 +244,24 @@ describe("explainDocxBytes", () => {
   it("returns null instead of throwing for bytes that are not a zip", async () => {
     const ctx = { path: "x.docx", part: "word/document.xml", locator: "/w:document/w:body/w:p" };
     await expect(explainDocxBytes(new Uint8Array([1, 2, 3]), ctx)).resolves.toBeNull();
+  });
+});
+
+describe("pictures in a paragraph", () => {
+  it("lists a stored picture with its name, alternative text and size", () => {
+    const src = handDocx(ANCHORED_PICTURE, { rels: { rIdImg: ["image", "media/wm.png"] } });
+    const e = explainParagraph(src, "word/document.xml", "/w:document/w:body/w:p");
+    expect(e?.pictures).toEqual([
+      { part: "word/media/wm.png", name: "Picture 7", alt: "Watermark", size: "1.76 × 0.88 cm" },
+    ]);
+  });
+  it("leaves out linked pictures and paragraphs without pictures", () => {
+    const linked = handDocx(ANCHORED_PICTURE, {
+      rels: { rIdImg: ["image", "https://example.com/a.png", true] },
+    });
+    expect(
+      explainParagraph(linked, "word/document.xml", "/w:document/w:body/w:p")?.pictures,
+    ).toBeUndefined();
+    expect(explain("<w:p/>")?.pictures).toBeUndefined();
   });
 });

@@ -181,3 +181,108 @@ test("an embedded, obfuscated font can be previewed", async ({ app }) => {
   await app.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });
+
+test("a picture can be found from its paragraph and replaced, safely", async ({ app }) => {
+  const png = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    ),
+    (c) => c.charCodeAt(0),
+  );
+  const replacement = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7, 7]);
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: "png",
+                data: png,
+                transformation: { width: 40, height: 40 },
+                altText: { name: "Logo", description: "Company logo", title: "Logo" },
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  const original = new Uint8Array(await Packer.toBuffer(doc));
+  await openDocx(app, "explain.docx", original);
+  await app.evaluate(
+    (data) => window.__demoPlatform?.seedBinary("/demo/new.png", data),
+    Array.from(replacement),
+  );
+
+  // Find the paragraph with the picture and ask about it.
+  await app.locator(".cm-content").getByText("Company logo").first().click();
+  await app.keyboard.press("Control+Alt+e");
+  const pane = app.getByRole("region", { name: "Explain this paragraph" });
+  await expect(pane).toContainText("Company logo");
+  await pane.getByRole("button", { name: "Show picture" }).click();
+
+  const viewer = app.getByRole("dialog", { name: "image1.png" });
+  await expect(viewer).toBeVisible();
+  await app.evaluate(() => window.__demoPlatform?.queueOpenDialog(["/demo/new.png"]));
+  await viewer.getByRole("button", { name: "Replace picture…" }).click();
+  await app
+    .getByRole("alertdialog", { name: "Replace image1.png?" })
+    .getByRole("button", { name: "Replace picture" })
+    .click();
+
+  await expect
+    .poll(() =>
+      app.evaluate(() =>
+        Array.from(window.__demoPlatform?.binaryFiles.get("/demo/explain.docx.bak") ?? []),
+      ),
+    )
+    .toEqual(Array.from(original));
+  const saved = await app.evaluate(() =>
+    Array.from(window.__demoPlatform?.binaryFiles.get("/demo/explain.docx") ?? []),
+  );
+  const before = unzipSync(original);
+  const after = unzipSync(Uint8Array.from(saved));
+  expect(Array.from(after["word/media/image1.png"] ?? [])).toEqual(Array.from(replacement));
+  const changed = Object.keys(before).filter(
+    (n) => Buffer.compare(Buffer.from(before[n] ?? []), Buffer.from(after[n] ?? [])) !== 0,
+  );
+  expect(changed).toEqual(["word/media/image1.png"]);
+});
+
+test("a replacement of the wrong picture type is refused and changes nothing", async ({ app }) => {
+  const png = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    ),
+    (c) => c.charCodeAt(0),
+  );
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [
+              new ImageRun({ type: "png", data: png, transformation: { width: 40, height: 40 } }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  const original = new Uint8Array(await Packer.toBuffer(doc));
+  await openDocx(app, "explain.docx", original);
+  await app.evaluate(
+    (data) => window.__demoPlatform?.seedBinary("/demo/photo.jpg", data),
+    [0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70],
+  );
+  await app.getByRole("treeitem", { name: /^image1\.png/ }).click();
+  const viewer = app.getByRole("dialog", { name: "image1.png" });
+  await app.evaluate(() => window.__demoPlatform?.queueOpenDialog(["/demo/photo.jpg"]));
+  await viewer.getByRole("button", { name: "Replace picture…" }).click();
+  await expect(app.getByText(/is a JPEG picture, but image1\.png is a PNG/)).toBeVisible();
+  const saved = await app.evaluate(() =>
+    Array.from(window.__demoPlatform?.binaryFiles.get("/demo/explain.docx") ?? []),
+  );
+  expect(saved).toEqual(Array.from(original));
+});

@@ -11,13 +11,14 @@
 import type {
   Explanation,
   ExplanationRow,
+  ExplanationPicture,
   ExplanationSection,
   ExplanationSource,
 } from "../../core/explain";
 import { Numbering } from "./numbering";
 import { Package, type PartSource } from "./package";
 import { Styles } from "./styles";
-import { child, locatorOf, type XElement } from "./xml";
+import { child, descendants, locatorOf, type XElement } from "./xml";
 
 export interface Layer {
   source: ExplanationSource;
@@ -476,7 +477,48 @@ export function explainWith(
   }
   notes.push("Text-box and conditional table formatting are not included.");
 
-  return { title: "Paragraph formatting", sections, notes };
+  const pictures = picturesIn(pkg, part, p);
+  return {
+    title: "Paragraph formatting",
+    sections,
+    ...(pictures.length > 0 ? { pictures } : {}),
+    notes,
+  };
+}
+
+const EMU_PER_CM = 360_000;
+
+/** The pictures drawn in a paragraph that are stored inside the file (not linked). */
+function picturesIn(pkg: Package, part: string, p: XElement): ExplanationPicture[] {
+  const out: ExplanationPicture[] = [];
+  const rels = pkg.relsOf(part);
+  const round = (n: number) => String(Math.round(n * 100) / 100);
+  for (const drawing of descendants(p, "w:drawing")) {
+    // The fallback copy of a drawing is the same picture again.
+    let inFallback = false;
+    for (let a = drawing.parent; a && a !== p; a = a.parent)
+      if (a.name === "mc:Fallback") inFallback = true;
+    if (inFallback) continue;
+    for (const blip of descendants(drawing, "a:blip")) {
+      const id = blip.attrs["r:embed"];
+      const rel = id === undefined ? undefined : rels.get(id);
+      if (!rel || rel.external) continue;
+      const docPr = descendants(drawing, "wp:docPr")[0];
+      const extent = descendants(drawing, "wp:extent")[0];
+      const cx = Number(extent?.attrs.cx);
+      const cy = Number(extent?.attrs.cy);
+      out.push({
+        part: rel.target,
+        name: docPr?.attrs.name ?? "",
+        alt: docPr?.attrs.descr ?? "",
+        size:
+          Number.isFinite(cx) && Number.isFinite(cy) && extent
+            ? `${round(cx / EMU_PER_CM)} × ${round(cy / EMU_PER_CM)} cm`
+            : "",
+      });
+    }
+  }
+  return out;
 }
 
 /**

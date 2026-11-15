@@ -106,6 +106,105 @@ export async function showBinaryPart(
   }
 }
 
+/** The picture type the first bytes show, or null if they are not one of the supported pictures. */
+export function sniffPicture(bytes: Uint8Array): string | null {
+  const at = (i: number, text: string) =>
+    [...text].every((c, k) => bytes[i + k] === c.charCodeAt(0));
+  if (bytes.length >= 8 && bytes[0] === 0x89 && at(1, "PNG")) return "png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return "jpeg";
+  if (bytes.length >= 6 && at(0, "GIF8")) return "gif";
+  if (bytes.length >= 14 && at(0, "BM")) return "bmp";
+  if (bytes.length >= 12 && at(0, "RIFF") && at(8, "WEBP")) return "webp";
+  return null;
+}
+
+/** Picture types by file extension, as `sniffPicture` names them. */
+function typeOfName(name: string): string | null {
+  const ext = extensionOf(name);
+  return ext === "jpg" ? "jpeg" : IMAGE_TYPES[ext] ? ext : null;
+}
+
+/** The biggest picture accepted as a replacement. */
+export const MAX_REPLACEMENT_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Replaces a picture inside the file with one the user chooses. The new picture must be the same
+ * type (a PNG for a PNG), because the file's relationships and content types name the type. The
+ * change is written through the checked save path, which keeps a one-off backup, and it is not
+ * undoable in the editor, so the user is asked first.
+ */
+async function replacePicture(wb: Workbench, info: BinaryPartInfo): Promise<void> {
+  const wanted = typeOfName(info.name);
+  if (!wanted) return;
+  const ext = extensionOf(info.name);
+  let chosen: string[];
+  try {
+    chosen = await wb.platform.showOpenDialog({
+      filters: [
+        {
+          name: `${wanted.toUpperCase()} picture`,
+          extensions: ext === "jpeg" ? ["jpeg", "jpg"] : [ext],
+        },
+      ],
+      multiple: false,
+    });
+  } catch (error) {
+    wb.notify({ kind: "error", message: `Could not open the file dialog: ${errorText(error)}` });
+    return;
+  }
+  const path = chosen[0];
+  if (path === undefined) return;
+  let bytes: Uint8Array;
+  try {
+    bytes = (await wb.platform.readBinaryFile(path)).bytes;
+  } catch (error) {
+    wb.notify({ kind: "error", message: `Could not read that file: ${errorText(error)}` });
+    return;
+  }
+  if (bytes.length > MAX_REPLACEMENT_BYTES) {
+    wb.notify({ kind: "error", message: "That picture is too large (the limit is 50 MB)." });
+    return;
+  }
+  const found = sniffPicture(bytes);
+  if (found !== wanted) {
+    wb.notify({
+      kind: "error",
+      message: found
+        ? `That is a ${found.toUpperCase()} picture, but ${info.name} is a ${wanted.toUpperCase()}. Convert it to ${wanted.toUpperCase()} first; nothing was changed.`
+        : `That file is not a ${wanted.toUpperCase()} picture. Nothing was changed.`,
+    });
+    return;
+  }
+  const choice = await wb.ask({
+    title: `Replace ${info.name}?`,
+    message: `${info.name} will be replaced inside ${baseNameOf(info.container)} with the chosen picture (${describeSize(bytes.length)}). Everywhere the file uses this picture shows the new one. A backup copy of the file is kept beside it the first time.\n\nThis cannot be undone in the editor.`,
+    actions: [
+      { value: "replace", label: "Replace picture" },
+      { value: "cancel", label: "Cancel" },
+    ],
+    cancelValue: "cancel",
+    initialFocus: "cancel",
+  });
+  if (choice !== "replace") return;
+  try {
+    await wb.platform.writeBinaryFile(joinContainerPath(info.container, info.part), bytes, {
+      overwrite: true,
+    });
+  } catch (error) {
+    wb.notify({ kind: "error", message: `Could not replace ${info.name}: ${errorText(error)}` });
+    return;
+  }
+  wb.notify({
+    message: `Replaced ${info.name}. The Formatting view updates when the file reloads.`,
+  });
+  await showBinaryPart(wb, info.container, info.part);
+}
+
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const baseNameOf = (path: string) =>
+  path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+
 async function saveCopy(wb: Workbench, info: BinaryPartInfo): Promise<void> {
   const ext = extensionOf(info.name);
   try {
@@ -268,6 +367,11 @@ function BinaryPartDialog({ workbench }: FeatureComponentProps) {
           <button type="button" onClick={() => void saveCopy(workbench, info)}>
             Save a copy…
           </button>
+          {typeOfName(info.name) && (
+            <button type="button" onClick={() => void replacePicture(workbench, info)}>
+              Replace picture…
+            </button>
+          )}
           <button type="button" onClick={close}>
             Close
           </button>
