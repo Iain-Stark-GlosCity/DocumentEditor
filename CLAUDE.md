@@ -3,6 +3,23 @@
 A Windows 11 desktop document editor. First goal: the best Markdown editor it can be.
 Other formats arrive later as extra format providers.
 
+## Where to start
+
+Read these before changing anything substantial:
+
+- `docs/ARCHITECTURE.md` how the pieces fit (interfaces, containers, safe save, testing).
+- `docs/STATUS.md` what works, what is unverified, known rough edges, parked decisions.
+- `docs/ROADMAP.md` what to do next.
+- `docs/AGENT-PLAYBOOK.md` how work is delegated to sub-agents, merged and gated.
+- `docs/docx-view.md` and `docs/docx-integrity.md` the DOCX Formatting view and the inspector rules.
+
+Scripts: `scripts/gate.sh [e2e]` (lint, typecheck, tests; must print GATE PASSED before any push) and
+`scripts/merge-agent.sh <agent-id> "<title>"`. Never pipe a check into `grep` in an `&&` chain.
+
+Container files (DOCX and other zips): never patch a cached copy, never re-zip (untouched entries
+are copied byte for byte), self-check before writing, refuse ill-formed XML, keep the one-off
+`.bak`, and never write a generated read-only view over the original. Details in the playbook.
+
 ## Stack
 
 - Shell: Tauri 2 (Rust) in `src-tauri/`. Target is Windows 11 (WebView2). Built on GitHub Actions.
