@@ -40,7 +40,8 @@ function useExplanation(wb: Workbench, container: string): Result {
   const state = useActiveEditorState(wb);
   const doc = useActiveDocument(wb);
   const entry = state && doc ? sourceAtCursor(wb) : undefined;
-  const key = entry ? `${entry.part}\u0000${entry.locator}` : "";
+  // The view is regenerated (new `modifiedMs`) when a part is saved, so the explanation follows.
+  const key = entry ? `${entry.part}\u0000${entry.locator}\u0000${doc?.modifiedMs}` : "";
   const [result, setResult] = useState<Result>({ status: "idle" });
 
   useEffect(() => {
@@ -112,6 +113,23 @@ function Row({ row, container, wb }: { row: ExplanationRow; container: string; w
         )}
         {row.uncertain && <span className="explain-uncertain"> (uncertain)</span>}
         {row.note && <p className="explain-note">{row.note}</p>}
+        {row.fix && (
+          <p className="explain-fix">
+            <button
+              type="button"
+              className="explain-fix-button"
+              title={row.fix.detail}
+              onClick={() =>
+                void wb.removePartElement(
+                  joinContainerPath(container, row.fix!.part),
+                  row.fix!.locator,
+                )
+              }
+            >
+              {row.fix.label}
+            </button>
+          </p>
+        )}
         {row.overridden?.map((o) => (
           <p className="explain-overridden" key={`${o.source.label}:${o.value}`}>
             Overrides {o.value} from <SourceLine source={o.source} container={container} wb={wb} />

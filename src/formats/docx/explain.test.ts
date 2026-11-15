@@ -92,6 +92,16 @@ describe("explainParagraph", () => {
     expect(left.note).toContain("list level");
   });
 
+  it("offers to remove the paragraph's own indent only when it decides the value", () => {
+    const own = explain('<w:p><w:pPr><w:pStyle w:val="Body"/><w:ind w:left="0"/></w:pPr></w:p>');
+    const fix = rowOf(own, "Left indent").fix;
+    expect(fix?.part).toBe("word/document.xml");
+    expect(fix?.locator).toBe("/w:document/w:body/w:p/w:pPr/w:ind");
+    expect(rowOf(own, "Space after").fix).toBeUndefined();
+    const styled = explain('<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr></w:p>');
+    expect(rowOf(styled, "Left indent").fix).toBeUndefined();
+  });
+
   it("treats numId 0 as no list", () => {
     const e = explain(
       '<w:p><w:pPr><w:pStyle w:val="Bullets"/><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr></w:p>',

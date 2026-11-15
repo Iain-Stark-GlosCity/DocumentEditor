@@ -190,6 +190,20 @@ export function findByLocator(root: XElement | null, locator: string): XElement 
   return cur;
 }
 
+/** Offers to delete the paragraph's own `w:ind` when it is what decides an indentation row. */
+function withFix(row: ExplanationRow, group: string): ExplanationRow {
+  const src = row.source;
+  if (group === "Indentation" && src?.label === "Direct formatting" && src.part && src.locator)
+    row.fix = {
+      label: "Remove this paragraph's own indent",
+      detail:
+        "Deletes the w:ind element from the paragraph so the style or list decides again. The edit appears in the XML tab: undo with Ctrl+Z, or save with Ctrl+S (a backup of the file is kept).",
+      part: src.part,
+      locator: src.locator,
+    };
+  return row;
+}
+
 export interface ParagraphStack {
   direct: XElement | undefined;
   styleId: string | undefined;
@@ -289,10 +303,13 @@ export function explainParagraph(
     (group) => ({
       heading: group,
       rows: PROPERTIES.filter((prop) => prop.group === group).map((prop) =>
-        row(
-          prop.label,
-          candidates(main_, prop.read, partOf),
-          alt ? candidates(alt, prop.read, partOf) : undefined,
+        withFix(
+          row(
+            prop.label,
+            candidates(main_, prop.read, partOf),
+            alt ? candidates(alt, prop.read, partOf) : undefined,
+          ),
+          group,
         ),
       ),
     }),

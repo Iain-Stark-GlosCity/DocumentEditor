@@ -13,6 +13,16 @@ export interface ExplanationSource {
   locator?: string;
 }
 
+/** A repair offered on a row: delete one element, shown in the editor as an ordinary, undoable edit. */
+export interface ExplanationFix {
+  label: string;
+  /** What it does and how to keep or undo it, in a sentence or two. */
+  detail: string;
+  part: string;
+  /** The element to delete. */
+  locator: string;
+}
+
 export interface ExplanationRow {
   label: string;
   /** The effective value, for example `1.27 cm (36 pt)`, or `not set`. */
@@ -22,6 +32,7 @@ export interface ExplanationRow {
   /** Earlier layers that set the property and lost, strongest first. */
   overridden?: { source: ExplanationSource; value: string }[];
   /** True when Word's precedence for this row is not certain (see `note`). */
+  fix?: ExplanationFix;
   uncertain?: boolean;
   note?: string;
 }

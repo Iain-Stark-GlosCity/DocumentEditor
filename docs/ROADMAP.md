@@ -4,8 +4,10 @@ Ordered by what to do next. Nothing here is started unless `STATUS.md` says so.
 
 ## Current milestone (started 15 Nov 2026)
 
-Done so far: steps 1 and 2 below (resolver in `src/formats/docx/explain.ts`, Explain pane, Ctrl+Alt+E,
-via `BinaryView.explain`). Next: steps 3 to 5.
+Done: steps 1 to 4 below (resolver in `src/formats/docx/explain.ts`, Explain pane Ctrl+Alt+E via
+`BinaryView.explain`, inspector rules in `inspect/rules-paragraphs.ts`, the "Remove this paragraph's
+own indent" repair, which edits the open XML part so it is undoable and saves through the verified
+path). Next: step 5 (Web Worker), then more repairs and real-document testing.
 
 **Effective paragraph formatting: "why does this paragraph look like that?"**
 

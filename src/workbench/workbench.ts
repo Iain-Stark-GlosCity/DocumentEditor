@@ -711,6 +711,23 @@ export class Workbench {
   }
 
   /**
+   * Deletes the element a locator names from an open part, as an ordinary edit in its tab: the
+   * document becomes unsaved, the change is undoable, and saving goes through the usual safe path.
+   * Returns false, changing nothing, if the element cannot be found or the editor is not showing.
+   */
+  async removePartElement(path: string, locator: string): Promise<boolean> {
+    if (!(await this.revealPart(path, locator))) return false;
+    const view = this.view;
+    const doc = this.activeDocument();
+    if (!view || !doc || doc.path?.toLowerCase() !== path.toLowerCase()) return false;
+    const { from, to } = view.state.selection.main;
+    if (from === to) return false; // Not found: revealPart already said so.
+    view.dispatch({ changes: { from, to, insert: "" }, userEvent: "delete.selection" });
+    view.focus();
+    return true;
+  }
+
+  /**
    * How `revealPart` waits for the editor to show a document: it calls this once per frame, for
    * at most `viewWaitMs`. Tests replace both to run without a real display.
    */
