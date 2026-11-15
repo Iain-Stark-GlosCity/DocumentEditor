@@ -2,9 +2,36 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deflateSync, zipSync } from "fflate";
-import { describe, expect, it } from "vitest";
+import { deflateSync, unzipSync, zipSync } from "fflate";
+import { describe, expect, it, vi } from "vitest";
 import { ArchiveError, crc32, readZip } from "./archive";
+
+// fflate, passed through but counted, so tests can assert how much work a patch does.
+const work = vi.hoisted(() => {
+  const counts = { deflateCalls: 0, deflatedBytes: 0, inflateCalls: 0 };
+  return Object.assign(counts, {
+    reset() {
+      counts.deflateCalls = 0;
+      counts.deflatedBytes = 0;
+      counts.inflateCalls = 0;
+    },
+  });
+});
+vi.mock("fflate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fflate")>();
+  return {
+    ...actual,
+    deflateSync(data: Uint8Array, options?: Parameters<typeof actual.deflateSync>[1]) {
+      work.deflateCalls++;
+      work.deflatedBytes += data.length;
+      return actual.deflateSync(data, options);
+    },
+    inflateSync(data: Uint8Array, options?: Parameters<typeof actual.inflateSync>[1]) {
+      work.inflateCalls++;
+      return actual.inflateSync(data, options);
+    },
+  };
+});
 
 const enc = new TextEncoder();
 const text = (s: string): Uint8Array => enc.encode(s);
@@ -24,6 +51,10 @@ interface Spec {
   fileComment?: string;
   time?: number;
   date?: number;
+  /** Extra general-purpose flag bits (for example 0x06, the deflate option bits). */
+  extraFlags?: number;
+  /** The stored (compressed) bytes as written, instead of compressing `data`. */
+  body?: Uint8Array;
   /** Overrides, for building corrupt entries. */
   crc?: number;
   claimedSize?: number;
@@ -52,10 +83,11 @@ function build(
   specs.forEach((spec, index) => {
     const data = spec.data ?? new Uint8Array(0);
     const method = spec.method ?? 8;
-    const body = method === 8 ? deflateSync(data) : data;
+    const body = spec.body ?? (method === 8 ? deflateSync(data) : data);
     const nameBytes = typeof spec.name === "string" ? [...text(spec.name)] : [...spec.name];
     const descriptor = spec.descriptor ?? "none";
-    const flags = (descriptor === "none" ? 0 : 8) | (spec.utf8Flag ? 0x800 : 0);
+    const flags =
+      (descriptor === "none" ? 0 : 8) | (spec.utf8Flag ? 0x800 : 0) | (spec.extraFlags ?? 0);
     const crc = spec.crc ?? crc32(data);
     const usize = spec.claimedSize ?? data.length;
     const time = spec.time ?? 0x6000 + index;
@@ -725,23 +757,332 @@ describe("replace", () => {
     });
   });
 
-  it("is fast: a 20 MB entry patches in well under 2 seconds", () => {
+  it("does linear work: a 20 MB entry is compressed once and nothing else is decompressed", () => {
+    // Counted work rather than a wall-clock limit, which fails on a loaded machine.
+    const others = [bigText(300_000), bigText(200_000)];
     const built = build([
-      { name: "a.xml", data: text("small") },
+      { name: "a.xml", data: others[0] },
       { name: "big.xml", data: bigText(1000) },
+      { name: "c.xml", data: others[1] },
     ]);
     const big = bigText(20 * 1024 * 1024);
     const zip = readZip(built.bytes);
-    const start = performance.now();
+    work.reset();
     const patched = zip.replace("big.xml", big);
-    const patchMs = performance.now() - start;
-    const readStart = performance.now();
+    // Exactly one deflate, of exactly the new content; no other entry inflated or re-deflated.
+    expect(work.deflateCalls).toBe(1);
+    expect(work.deflatedBytes).toBe(big.length);
+    expect(work.inflateCalls).toBe(0);
+    // The output is the other records verbatim plus the new record: no copies accumulate.
+    const otherRecords = built.records
+      .filter((_, i) => i !== 1)
+      .reduce((sum, [s, e]) => sum + (e - s), 0);
+    expect(patched.length).toBeLessThan(otherRecords + big.length / 10 + 1024);
+    work.reset();
     const back = readZip(patched).bytes("big.xml");
-    const readMs = performance.now() - readStart;
-    expect(back.length).toBe(big.length);
+    expect(work.inflateCalls).toBe(1);
+    expect(work.deflateCalls).toBe(0);
     expect(same(back, big)).toBe(true);
-    console.info(`20 MB patch: ${patchMs.toFixed(0)} ms, read back: ${readMs.toFixed(0)} ms`);
-    expect(patchMs).toBeLessThan(2000);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Adversarial layouts, checked with readers that share no code with archive.ts.
+
+/** Each entry's raw local record (header, data, descriptor), found by an independent walk. */
+function localRecords(bytes: Uint8Array): Array<{ name: string; record: Uint8Array }> {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  for (let p = bytes.length - 22; p >= 0; p--) {
+    if (
+      dv.getUint32(p, true) === 0x06054b50 &&
+      p + 22 + dv.getUint16(p + 20, true) === bytes.length
+    ) {
+      eocd = p;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error("no end record");
+  const count = dv.getUint16(eocd + 10, true);
+  const cdOffset = dv.getUint32(eocd + 16, true);
+  const found: Array<{ name: string; offset: number }> = [];
+  let p = cdOffset;
+  for (let i = 0; i < count; i++) {
+    const nameLen = dv.getUint16(p + 28, true);
+    const name = Array.from(bytes.subarray(p + 46, p + 46 + nameLen), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    found.push({ name, offset: dv.getUint32(p + 42, true) });
+    p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+  }
+  const starts = [...found.map((f) => f.offset), cdOffset].sort((a, b) => a - b);
+  return found.map(({ name, offset }) => {
+    const end = starts.find((s) => s > offset) ?? cdOffset;
+    return { name, record: bytes.subarray(offset, end) };
+  });
+}
+
+const hasPython = spawnSync("python3", ["-c", "import zipfile"], { stdio: "ignore" }).status === 0;
+const hasUnzip = spawnSync("unzip", ["-v"], { stdio: "ignore" }).status === 0;
+
+/** Python's zipfile (if present): [size, crc] of every entry, read and CRC-checked by Python. */
+function pythonEntries(bytes: Uint8Array): Array<[number, number]> | null {
+  if (!hasPython) return null;
+  const dir = mkdtempSync(join(tmpdir(), "archive-py-"));
+  try {
+    const file = join(dir, "a.zip");
+    writeFileSync(file, bytes);
+    const script =
+      "import zipfile,zlib,json,sys\n" +
+      "z=zipfile.ZipFile(sys.argv[1])\n" +
+      "print(json.dumps([[len(d),zlib.crc32(d)] for d in (z.read(i) for i in z.infolist())]))";
+    const r = spawnSync("python3", ["-I", "-c", script, file], { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`python zipfile rejected the archive: ${r.stderr}`);
+    return JSON.parse(r.stdout) as Array<[number, number]>;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** `unzip -t` (if present): "ok", or its complaint. */
+function unzipTest(bytes: Uint8Array): string | null {
+  if (!hasUnzip) return null;
+  const dir = mkdtempSync(join(tmpdir(), "archive-unzip-"));
+  try {
+    const file = join(dir, "a.zip");
+    writeFileSync(file, bytes);
+    const r = spawnSync("unzip", ["-tqq", file], { encoding: "utf8" });
+    return r.status === 0 ? "ok" : `unzip -t failed (${r.status}): ${r.stdout}${r.stderr}`;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Proves `patched` is `original` with only entry `index` replaced: every other local record is
+ * byte-identical, and fflate, Python and unzip read every entry as `contents` (in entry order).
+ */
+function expectSurgical(
+  original: Uint8Array,
+  patched: Uint8Array,
+  index: number,
+  contents: readonly Uint8Array[],
+  external = true,
+): void {
+  const before = localRecords(original);
+  const after = localRecords(patched);
+  expect(after.map((r) => r.name)).toEqual(before.map((r) => r.name));
+  before.forEach((r, i) => {
+    if (i !== index) expect(same(after[i]!.record, r.record), `record ${i}`).toBe(true);
+  });
+  const fromFflate = unzipSync(patched);
+  readZip(patched).entries.forEach((entry, i) => {
+    if (entry.isDirectory) return;
+    expect(same(fromFflate[entry.name]!, contents[i]!), `fflate ${entry.name}`).toBe(true);
+  });
+  if (!external) return;
+  const py = pythonEntries(patched);
+  if (py) expect(py).toEqual(contents.map((c) => [c.length, crc32(c)]));
+  // unzip's overlap check assumes signed data descriptors, so it rejects some valid archives;
+  // the patch must not make it any less happy than it was with the original.
+  const unzip = unzipTest(patched);
+  if (unzip) expect(unzip).toBe(unzipTest(original));
+}
+
+describe("adversarial archives", () => {
+  /** Info-ZIP Unicode Path extra field (0x7075): version 1, CRC of the header name, the name. */
+  const unicodePath = (name: string): Uint8Array =>
+    new Uint8Array([
+      ...le(0x7075, 2),
+      ...le(5 + text(name).length, 2),
+      1,
+      ...le(crc32(text(name)), 4),
+      ...text(name),
+    ]);
+
+  function zoo(): { built: Built; contents: Uint8Array[] } {
+    const specs: Spec[] = [
+      { name: "mimetype", data: text("application/zip-test"), method: 0 },
+      { name: "dir/", data: new Uint8Array(0), method: 0 },
+      { name: "a\\back\\slash.xml", data: bigText(900) },
+      { name: "../up.xml", data: text("<up/>"), descriptor: "signed" },
+      { name: "/abs.xml", data: bigText(300), descriptor: "unsigned", extraFlags: 0x06 },
+      { name: "名前/ünï.xml", data: text("<u>ü</u>"), utf8Flag: true, fileComment: "c" },
+      {
+        name: "ut.xml",
+        data: bigText(2000),
+        localExtra: new Uint8Array([0x55, 0x54, 5, 0, 1, 1, 2, 3, 4]),
+        centralExtra: unicodePath("ut.xml"),
+      },
+      { name: "empty-stored.xml", data: new Uint8Array(0), method: 0 },
+      { name: "empty-deflated.xml", data: new Uint8Array(0), method: 8 },
+      { name: "bin.dat", data: Uint8Array.from({ length: 256 }, (_, i) => i), method: 0 },
+    ];
+    return {
+      built: build(specs, { comment: "zoo comment" }),
+      contents: specs.map((s) => s.data ?? new Uint8Array(0)),
+    };
+  }
+
+  it("reads every entry of a zoo of unusual entries, as python does", () => {
+    const { built, contents } = zoo();
+    const zip = readZip(built.bytes);
+    expect(zip.entries.map((e) => e.name)).toContain("a\\back\\slash.xml");
+    zip.entries.forEach((e, i) => {
+      if (!e.isDirectory) expect(same(zip.bytes(e.name), contents[i]!), e.name).toBe(true);
+    });
+    const py = pythonEntries(built.bytes);
+    if (py) expect(py).toEqual(contents.map((c) => [c.length, crc32(c)]));
+  });
+
+  // Generous timeout: it starts python and unzip about twenty times, slow on a loaded machine.
+  it(
+    "patches each entry of the zoo in turn, leaving every other record byte for byte",
+    {
+      timeout: 120_000,
+    },
+    () => {
+      const { built, contents } = zoo();
+      const zip = readZip(built.bytes);
+      zip.entries.forEach((entry, index) => {
+        if (entry.isDirectory) return;
+        [bigText(1500), new Uint8Array(0), text("tiny")].forEach((replacement, n) => {
+          const patched = zip.replace(entry.name, replacement);
+          const expected = contents.map((c, i) => (i === index ? replacement : c));
+          // The outside readers check the first replacement of each entry; ours check them all.
+          expectSurgical(built.bytes, patched, index, expected, n === 0);
+        });
+      });
+    },
+  );
+
+  it("copies a neighbour with a bad CRC exactly as it was (never repaired or dropped)", () => {
+    const built = build([
+      { name: "bad.xml", data: text("damaged"), crc: 0xdeadbeef },
+      { name: "good.xml", data: text("<g/>") },
+    ]);
+    const patched = readZip(built.bytes).replace("good.xml", text("<h/>"));
+    expect(same(localRecords(patched)[0]!.record, localRecords(built.bytes)[0]!.record)).toBe(true);
+    expect(() => readZip(patched).bytes("bad.xml")).toThrow(/CRC/);
+    expect(str(readZip(patched).bytes("good.xml"))).toBe("<h/>");
+  });
+
+  it("reads a deflated entry with no compressed bytes at all as empty, as other readers do", () => {
+    const built = build([
+      { name: "a.xml", data: new Uint8Array(0), method: 8, body: new Uint8Array(0) },
+      { name: "b.xml", data: text("<b/>") },
+    ]);
+    const py = pythonEntries(built.bytes);
+    if (py) expect(py[0]).toEqual([0, 0]);
+    const zip = readZip(built.bytes);
+    expect(zip.bytes("a.xml").length).toBe(0);
+    expectSurgical(built.bytes, zip.replace("b.xml", text("<c/>")), 1, [
+      new Uint8Array(0),
+      text("<c/>"),
+    ]);
+    // But no bytes that claim to inflate to something is still corrupt.
+    const b = built.bytes.slice();
+    new DataView(b.buffer).setUint32(built.cdOffset + 24, 5, true);
+    expect(() => readZip(b).bytes("a.xml")).toThrow(ArchiveError);
+  });
+
+  describe("refuses to patch what it cannot reproduce exactly", () => {
+    const expectRefused = (bytes: Uint8Array, name: string, why: RegExp): void => {
+      let zip: ReturnType<typeof readZip>;
+      try {
+        zip = readZip(bytes);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArchiveError);
+        return;
+      }
+      expect(() => zip.replace(name, text("<new/>"))).toThrow(why);
+    };
+
+    /** Inserts `extra` at the end of the central directory and counts it in the CD size. */
+    function withCentralTail(built: Built, extra: Uint8Array): Uint8Array {
+      const eocd = built.bytes.length - 22;
+      const out = new Uint8Array(built.bytes.length + extra.length);
+      out.set(built.bytes.subarray(0, eocd), 0);
+      out.set(extra, eocd);
+      out.set(built.bytes.subarray(eocd), eocd + extra.length);
+      const dv = new DataView(out.buffer);
+      const at = eocd + extra.length;
+      dv.setUint32(at + 12, dv.getUint32(at + 12, true) + extra.length, true);
+      return out;
+    }
+
+    const two = (): Built =>
+      build([
+        { name: "a.xml", data: text("<a/>") },
+        { name: "b.xml", data: text("<b/>") },
+      ]);
+
+    it("data in the central directory after the last counted header (it would be dropped)", () => {
+      // A digital signature record (header 0x05054b50) belongs to the central directory.
+      const signature = new Uint8Array([...le(0x05054b50, 4), ...le(4, 2), 1, 2, 3, 4]);
+      const bytes = withCentralTail(two(), signature);
+      expect(str(readZip(bytes).bytes("a.xml"))).toBe("<a/>");
+      expectRefused(bytes, "a.xml", /central directory/);
+    });
+
+    it("a central header that the end record does not count (an alias of a record)", () => {
+      const built = two();
+      const second = built.cdOffset + 46 + 5;
+      const alias = built.bytes.slice(second, second + 46 + 5);
+      new DataView(alias.buffer).setUint32(42, 0, true);
+      expectRefused(withCentralTail(built, alias), "b.xml", /central directory/);
+    });
+
+    it("two central headers sharing one local record", () => {
+      const built = two();
+      const b = built.bytes.slice();
+      new DataView(b.buffer).setUint32(built.cdOffset + 46 + 5 + 42, 0, true);
+      expectRefused(b, "a.xml", /Cannot patch/);
+    });
+
+    it("a record that starts inside another one's data (overlap)", () => {
+      const inner = build([{ name: "x.xml", data: text("<x/>"), method: 0 }]);
+      const built = build([
+        { name: "a.bin", data: inner.bytes.subarray(0, inner.records[0]![1]), method: 0 },
+        { name: "b.xml", data: text("<b/>") },
+      ]);
+      const b = built.bytes.slice();
+      // Point b's central header at the local header hidden inside a's data.
+      new DataView(b.buffer).setUint32(built.cdOffset + 46 + 5 + 42, 30 + 5, true);
+      expectRefused(b, "a.bin", /Cannot patch/);
+    });
+
+    it("offsets beyond the central directory, and a truncated central directory", () => {
+      const built = two();
+      const far = built.bytes.slice();
+      new DataView(far.buffer).setUint32(built.cdOffset + 42, 0x7ffffff0, true);
+      expect(() => readZip(far).bytes("a.xml")).toThrow(ArchiveError);
+      expectRefused(far, "b.xml", /Corrupt|Cannot patch/);
+      // Remove the last 10 bytes of the central directory, keeping a well-formed end record.
+      const eocd = built.bytes.length - 22;
+      const cut = new Uint8Array(built.bytes.length - 10);
+      cut.set(built.bytes.subarray(0, eocd - 10), 0);
+      cut.set(built.bytes.subarray(eocd), eocd - 10);
+      expect(() => readZip(cut)).toThrow(ArchiveError);
+    });
+
+    it("a neighbour with a zip64 data descriptor (24 bytes)", () => {
+      const built = build([
+        { name: "a.xml", data: text("<a/>"), descriptor: "signed" },
+        { name: "b.xml", data: text("<b/>") },
+      ]);
+      const aEnd = built.records[0]![1];
+      const grow = 8;
+      const b = new Uint8Array(built.bytes.length + grow);
+      b.set(built.bytes.subarray(0, aEnd), 0);
+      b.set(built.bytes.subarray(aEnd), aEnd + grow);
+      const dv = new DataView(b.buffer);
+      const cd = built.cdOffset + grow;
+      dv.setUint32(cd + 46 + 5 + 42, built.records[1]![0] + grow, true);
+      dv.setUint32(b.length - 22 + 16, cd, true);
+      expect(str(readZip(b).bytes("b.xml"))).toBe("<b/>");
+      expectRefused(b, "b.xml", /unexpected 24 bytes/);
+    });
   });
 });
 

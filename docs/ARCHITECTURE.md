@@ -114,7 +114,8 @@ A zip-based file is treated as a **folder of parts**, not edited through a rich 
   (never a cache), encode the text, refuse ill-formed XML for `.xml`/`.rels` parts (names the line
   and column), patch the archive, **self-check** the patched archive entry by entry against the
   original (names, order, sizes, CRCs, the new part's bytes) and refuse to write on any difference,
-  re-check that the file's modification time did not change meanwhile, take a one-off `.bak` copy the
+  re-check that the file's modification time did not change meanwhile and that its bytes are still
+  the ones that were patched (FAT keeps times to 2 seconds; some programs restore them), take a one-off `.bak` copy the
   first time per session (never overwriting an existing `.bak`), then atomic write. Writes per
   container are serialised.
 - **Part version tokens**: saving one part changes the container's real modification time, which

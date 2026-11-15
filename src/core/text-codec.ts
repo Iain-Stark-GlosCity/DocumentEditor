@@ -87,7 +87,18 @@ export function decodePartText(bytes: Uint8Array): DecodedText {
   return { text, format: { encoding, bom, eol, mixedEol: crlf > 0 && lf > 0 } };
 }
 
+/** An unpaired surrogate: UTF-8 would replace it with U+FFFD, UTF-16 would write bytes that
+ *  `decodePartText` then refuses. Either way the saved part would not read back as the text. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/** Throws if `text` cannot be written exactly (it holds an unpaired surrogate). */
 export function encodePartText(text: string, format: FileFormat): Uint8Array {
+  const lone = LONE_SURROGATE.exec(text);
+  if (lone) {
+    throw new Error(
+      `The text has an invalid character (an unpaired surrogate) at offset ${lone.index}, which cannot be saved exactly`,
+    );
+  }
   const body = format.eol === "crlf" ? text.replaceAll("\n", "\r\n") : text;
   if (format.encoding === "utf-8") {
     const encoded = new TextEncoder().encode(body);

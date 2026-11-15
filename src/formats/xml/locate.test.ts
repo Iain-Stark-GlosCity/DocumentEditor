@@ -132,7 +132,7 @@ describe("locateElement", () => {
     expect(xmlProvider.locate?.("<r><a/></r>", "/r/a")).toEqual({ from: 3, to: 7 });
   });
 
-  it("finds a deep element of a 3 MB single-line document quickly", () => {
+  it("finds a deep element of a 3 MB single-line document in one pass over its tags", () => {
     const para = (i: number) =>
       `<w:p w:rsidR="00A${i}"><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Paragraph ${i} &gt; text</w:t></w:r></w:p>`;
     const parts: string[] = [];
@@ -140,11 +140,29 @@ describe("locateElement", () => {
     const text = `<?xml version="1.0"?><w:document xmlns:w="x"><w:body>${parts.join("")}<w:sectPr/></w:body></w:document>`;
     expect(text.length).toBeGreaterThan(3_000_000);
     expect(text.includes("\n")).toBe(false);
-    const start = performance.now();
-    const hit = found(text, "/w:document/w:body/w:p[19990]/w:r/w:t");
-    const ms = performance.now() - start;
+    // Counted work rather than a wall-clock limit, which fails on a loaded machine: the start-tag
+    // pattern (the only sticky one) runs once per start tag up to the target and never again.
+    const exec = RegExp.prototype.exec;
+    let tagMatches = 0;
+    RegExp.prototype.exec = function (this: RegExp, input: string) {
+      if (this.sticky) tagMatches++;
+      return exec.call(this, input);
+    };
+    let range;
+    try {
+      range = locateElement(text, "/w:document/w:body/w:p[19990]/w:r/w:t");
+    } finally {
+      RegExp.prototype.exec = exec;
+    }
+    expect(range).not.toBeNull();
+    const hit = text.slice(range!.from, range!.to);
     expect(hit).toContain("Paragraph 19990 &gt; text");
-    expect(ms).toBeLessThan(100);
+    let startTags = 0;
+    for (let i = text.indexOf("<"); i >= 0 && i < range!.to; i = text.indexOf("<", i + 1)) {
+      const c = text[i + 1];
+      if (c !== "/" && c !== "?" && c !== "!") startTags++;
+    }
+    expect(tagMatches).toBe(startTags);
     expect(found(text, "/w:document/w:body/w:p[20001]")).toBeNull();
     expect(found(text, "/w:document/w:body/w:sectPr")).toBe("<w:sectPr/>");
   });

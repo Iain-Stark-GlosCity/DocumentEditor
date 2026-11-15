@@ -5,7 +5,7 @@ import type { FormatProvider } from "../core/format";
 import { FormatRegistry } from "../core/registry";
 import { ContainerPlatform, isTextPart } from "./containers";
 import { MemoryPlatform } from "./memory";
-import type { FileFormat } from "./platform";
+import type { FileFormat, Platform } from "./platform";
 
 // A deliberately faulty `replace`, to prove the self-check blocks a bad result before it is written.
 const fault = vi.hoisted(() => ({ mode: null as null | "noop" | "other" | "reorder" }));
@@ -565,5 +565,118 @@ describe("part version tokens", () => {
     await token("word/styles.xml");
     memory.seedBinary(CONTAINER, original);
     expect(await token("word/document.xml")).not.toBe(doc0);
+  });
+});
+
+describe("saving under concurrency and interference", () => {
+  /** Wraps `inner` so that every string argument is passed through `map` first. */
+  function mapPaths(inner: MemoryPlatform, map: (path: string) => string): Platform {
+    return new Proxy(inner, {
+      get(target, prop) {
+        const value: unknown = Reflect.get(target, prop);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) =>
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- forwarding as is
+          value.apply(
+            target,
+            args.map((a) => (typeof a === "string" ? map(a) : a)),
+          );
+      },
+    });
+  }
+
+  function over(inner: Platform): ContainerPlatform {
+    const registry = new FormatRegistry();
+    registry.register(fakeDocx);
+    return new ContainerPlatform(inner, registry);
+  }
+
+  it("serialises saves of one container reached by two spellings of its Windows path", async () => {
+    // Windows paths are case-insensitive and accept either slash: one file, three spellings.
+    const fold = (p: string) => (/^[a-z]:/i.test(p) ? p.toLowerCase().replaceAll("/", "\\") : p);
+    memory.seedBinary("c:\\docs\\report.docx", docx());
+    const shared = over(mapPaths(memory, fold));
+    await Promise.all([
+      shared.writeFile("C:\\Docs\\report.docx!/word/document.xml", "<doc>one</doc>", LF),
+      shared.writeFile("c:\\docs\\REPORT.docx!/word/styles.xml", "<styles>two</styles>", LF),
+      shared.writeFile("C:/Docs/report.docx!/_rels/.rels", "<rels>three</rels>", LF),
+    ]);
+    const now = readZip(disk("c:\\docs\\report.docx"));
+    expect(dec(now.bytes("word/document.xml"))).toBe("<doc>one</doc>");
+    expect(dec(now.bytes("word/styles.xml"))).toBe("<styles>two</styles>");
+    expect(dec(now.bytes("_rels/.rels"))).toBe("<rels>three</rels>");
+  });
+
+  /** A platform whose clock never moves (FAT's 2-second times, or a program restoring times). */
+  function frozenClock(): Platform {
+    return new Proxy(memory, {
+      get(target, prop) {
+        if (prop === "statFile") {
+          return async (path: string) => ((await target.statFile(path)) ? { modifiedMs: 1000 } : null);
+        }
+        if (prop === "readBinaryFile") {
+          return async (path: string) => ({ ...(await target.readBinaryFile(path)), modifiedMs: 1000 });
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }
+
+  it("does not overwrite a container replaced during the save when its time did not change", async () => {
+    const coarse = over(frozenClock());
+    const real = memory.readBinaryFile.bind(memory);
+    let interfere = true;
+    vi.spyOn(memory, "readBinaryFile").mockImplementation(async (path) => {
+      const result = await real(path);
+      if (interfere) {
+        interfere = false;
+        memory.seedBinary(CONTAINER, docx({ "word/document.xml": "<other-program/>" }));
+      }
+      return result;
+    });
+    await expect(coarse.writeFile(part("word/styles.xml"), "<s>mine</s>", LF)).rejects.toThrow(
+      /changed on disk/,
+    );
+    expect(dec(readZip(disk()).bytes("word/document.xml"))).toBe("<other-program/>");
+    expect(dec(readZip(disk()).bytes("word/styles.xml"))).toBe(STYLES);
+  });
+
+  it("does not recreate a container deleted during the save", async () => {
+    const real = memory.readBinaryFile.bind(memory);
+    vi.spyOn(memory, "readBinaryFile").mockImplementationOnce(async (path) => {
+      const result = await real(path);
+      memory.binaryFiles.delete(CONTAINER);
+      return result;
+    });
+    await expect(platform.writeFile(part("word/styles.xml"), "<s/>", LF)).rejects.toThrow(
+      /changed on disk/,
+    );
+    expect(memory.binaryFiles.has(CONTAINER)).toBe(false);
+  });
+
+  it("a failed write leaves the file whole, and the next save starts from the file on disk", async () => {
+    await platform.writeFile(part("word/styles.xml"), "<s>first</s>", LF); // takes the backup
+    const saved = disk();
+    memory.failNextBinaryWrite = new Error("disk full");
+    await expect(platform.writeFile(part("word/document.xml"), "<d>lost</d>", LF)).rejects.toThrow(
+      /disk full/,
+    );
+    expect(disk()).toEqual(saved);
+    const { modifiedMs } = await platform.writeFile(part("word/document.xml"), "<d>kept</d>", LF);
+    const now = readZip(disk());
+    expect(dec(now.bytes("word/document.xml"))).toBe("<d>kept</d>");
+    expect(dec(now.bytes("word/styles.xml"))).toBe("<s>first</s>");
+    expect((await platform.statFile(part("word/document.xml")))?.modifiedMs).toBe(modifiedMs);
+    // The backup is still the very first version.
+    expect(dec(readZip(disk(`${CONTAINER}.bak`)).bytes("word/styles.xml"))).toBe(STYLES);
+  });
+
+  it("refuses text that cannot be encoded exactly, and writes nothing", async () => {
+    const original = disk();
+    await expect(platform.writeFile(part("word/styles.xml"), "<s>\uD800</s>", LF)).rejects.toThrow(
+      /unpaired surrogate.*Nothing was saved/,
+    );
+    expect(disk()).toEqual(original);
   });
 });

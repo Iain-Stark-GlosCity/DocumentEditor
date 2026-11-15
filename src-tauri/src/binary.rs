@@ -3,7 +3,9 @@
 
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+use crate::atomic::temp_beside;
 
 /// Why a binary write or copy failed. `Exists` is reported to the front end as a typed error.
 #[derive(Debug)]
@@ -36,15 +38,6 @@ pub fn percent_decode(text: &str) -> Result<String, String> {
         }
     }
     String::from_utf8(out).map_err(|_| "Not valid UTF-8".to_string())
-}
-
-fn temp_beside(target: &Path) -> io::Result<PathBuf> {
-    let dir = target.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let name = target
-        .file_name()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Not a file path"))?
-        .to_string_lossy();
-    Ok(dir.join(format!(".{name}.{}.tmp", std::process::id())))
 }
 
 /// Creates the parent folders, refuses an existing target unless `overwrite`, and otherwise
@@ -100,6 +93,7 @@ pub fn copy_to(from: &Path, to: &Path, overwrite: bool) -> Result<(), BinaryErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("docedit-binary-{}-{name}", std::process::id()));

@@ -105,10 +105,13 @@ pub fn stat_file(path: String) -> Result<Option<WriteResult>> {
 
 #[tauri::command]
 pub fn read_file(app: AppHandle, path: String) -> Result<FileData> {
+    // The time BEFORE the bytes: a change landing during the read then shows as a newer time
+    // later. Taken after, it would vouch for bytes it never saw and hide that change.
+    let modified_ms = modified_ms(Path::new(&path))?;
     let bytes = fs::read(&path)?;
     let (text, format) = textfile::decode(&bytes)?;
     allow_assets_beside(&app, &path);
-    Ok(FileData { text, format, modified_ms: modified_ms(Path::new(&path))? })
+    Ok(FileData { text, format, modified_ms })
 }
 
 /// Atomic: write a temporary file beside the target, flush it to disk, then rename over it.
@@ -246,7 +249,7 @@ fn recovery_file(app: &AppHandle, id: &str) -> Result<PathBuf> {
 #[tauri::command]
 pub fn write_recovery(app: AppHandle, snapshot: RecoverySnapshot) -> Result<()> {
     let file = recovery_file(&app, &snapshot.id)?;
-    fs::write(file, serde_json::to_vec(&snapshot)?)?;
+    crate::recovery::write_snapshot(&file, &snapshot)?;
     Ok(())
 }
 
