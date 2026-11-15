@@ -52,3 +52,71 @@ describe("formatting.extreme-indent", () => {
     expect(inTable).toEqual([]);
   });
 });
+
+describe("indent rules, further cases", () => {
+  const find = (f: ReturnType<typeof run>, rule: string) => f.find((x) => x.rule === rule);
+
+  it("flags a direct first-line indent that replaces the level's hanging indent", () => {
+    const f = run(list('<w:ind w:left="720" w:firstLine="0"/>'));
+    expect(find(f, "formatting.indent-overrides-list")?.facts?.count).toBe(1);
+  });
+  it("compares start with left and treats an equal hanging indent as equal", () => {
+    const f = run(list('<w:ind w:start="720" w:hanging="360"/>'));
+    expect(find(f, "formatting.indent-overrides-list")).toBeUndefined();
+  });
+  it("does not call a direct indent an override when the level sets none", () => {
+    const bare = `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>`;
+    const f = inspectWith(
+      handDocx(list('<w:ind w:left="1440"/>'), { numbering: bare, sectPr: SECT }),
+      paragraphRules,
+    );
+    expect(find(f, "formatting.indent-overrides-list")).toBeUndefined();
+  });
+
+  it("skips text boxes, which have their own width", () => {
+    const f = run(
+      '<w:p><w:r><w:pict><w:txbxContent><w:p><w:pPr><w:ind w:left="9000"/></w:pPr></w:p></w:txbxContent></w:pict></w:r></w:p>',
+    );
+    expect(find(f, "formatting.extreme-indent")).toBeUndefined();
+  });
+  it("uses the width of the section the paragraph is in, not the last one", () => {
+    const narrow =
+      '<w:p><w:pPr><w:ind w:left="3000"/><w:sectPr><w:pgSz w:w="6000" w:h="8000"/><w:pgMar w:left="500" w:right="500"/></w:sectPr></w:pPr></w:p>';
+    // 3000 of 5000 is fine for the narrow first section; the wide last section would also be fine.
+    expect(find(run(narrow + "<w:p/>"), "formatting.extreme-indent")).toBeUndefined();
+    const tooMuch = narrow.replace('w:left="3000"', 'w:left="4500"');
+    // 4500 of 5000 is extreme in its own section, though only 4500 of 9026 in the last one.
+    expect(find(run(tooMuch + "<w:p/>"), "formatting.extreme-indent")?.facts?.count).toBe(1);
+  });
+  it("is not fooled by the old properties inside a section change", () => {
+    const sect =
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1440" w:right="1440"/><w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="2000" w:h="3000"/></w:sectPr></w:sectPrChange></w:sectPr>';
+    const f = inspectWith(
+      handDocx('<w:p><w:pPr><w:ind w:left="3000"/></w:pPr></w:p>', { sectPr: sect }),
+      paragraphRules,
+    );
+    expect(find(f, "formatting.extreme-indent")).toBeUndefined();
+  });
+  it("measures against the column width in a multi-column section", () => {
+    const cols =
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:left="1440" w:right="1440"/><w:cols w:num="3" w:space="720"/></w:sectPr>';
+    const f = inspectWith(
+      handDocx('<w:p><w:pPr><w:ind w:left="2400"/></w:pPr></w:p>', { sectPr: cols }),
+      paragraphRules,
+    );
+    // Column width is (9026 - 1440) / 3 = 2528; 2400 of it is extreme.
+    expect(find(f, "formatting.extreme-indent")?.facts?.count).toBe(1);
+  });
+  it("does not flag a hanging indent or ignore a style-set indent", () => {
+    const f = run('<w:p><w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr></w:p>');
+    expect(find(f, "formatting.extreme-indent")).toBeUndefined();
+  });
+  it("leaves an indent stated in characters alone, since the twips are not used", () => {
+    const f = run('<w:p><w:pPr><w:ind w:left="9000" w:leftChars="100"/></w:pPr></w:p>');
+    expect(find(f, "formatting.extreme-indent")).toBeUndefined();
+  });
+  it("ignores non-numeric and empty values", () => {
+    const f = run('<w:p><w:pPr><w:ind w:left="" w:right="abc"/></w:pPr></w:p>');
+    expect(f).toEqual([]);
+  });
+});

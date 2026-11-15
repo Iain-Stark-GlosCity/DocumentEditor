@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { describeTwips, explainParagraph, findByLocator } from "./explain";
-import { handDocx } from "./test-helpers";
+import { describeTwips, explainParagraph, findByLocator, parseTwips } from "./explain";
+import { handDocx, sourceFromParts } from "./test-helpers";
+import { explainDocxBytes } from "./explain-bytes";
 import { parseXml } from "./xml";
 
 const STYLES = `
@@ -150,5 +151,97 @@ describe("findByLocator", () => {
   it("follows names as written", () => {
     const doc = parseXml('<a:r xmlns:a="x"><a:b/><a:b><a:c/></a:b></a:r>');
     expect(findByLocator(doc.root, "/a:r/a:b[2]/a:c")?.rawName).toBe("a:c");
+  });
+});
+
+describe("parseTwips", () => {
+  it("reads integers and universal measures and rejects the rest", () => {
+    expect(parseTwips("720")).toBe(720);
+    expect(parseTwips("-720")).toBe(-720);
+    expect(parseTwips("36pt")).toBe(720);
+    expect(parseTwips("1in")).toBe(1440);
+    expect(parseTwips("2.54cm")).toBe(1440);
+    for (const bad of ["", " ", "abc", "0x10", "1e3", "NaN", "Infinity", "12px"])
+      expect(parseTwips(bad)).toBeUndefined();
+  });
+});
+
+describe("explainParagraph edge cases", () => {
+  it("does not read an empty or hexadecimal attribute as a number", () => {
+    const e = explain(
+      '<w:p><w:pPr><w:pStyle w:val="Body"/><w:ind w:left="" w:right="0x10"/></w:pPr></w:p>',
+    );
+    expect(rowOf(e, "Left indent").source?.label).toBe('Style "Body Text"');
+    expect(rowOf(e, "Right indent").value).toBe("not set");
+  });
+
+  it("falls back to the default style when the paragraph style is not defined", () => {
+    const styles = STYLES.replace(
+      '<w:name w:val="Normal"/>',
+      '<w:name w:val="Normal"/><w:pPr><w:ind w:left="200"/></w:pPr>',
+    );
+    const src = handDocx('<w:p><w:pPr><w:pStyle w:val="Gone"/></w:pPr></w:p>', { styles });
+    const e = explainParagraph(src, "word/document.xml", "/w:document/w:body/w:p");
+    expect(rowOf(e, "Left indent").source?.label).toBe('Style "Normal"');
+    expect(rowOf(e, "Paragraph style").value).toContain("Gone");
+  });
+
+  it("uses the paragraph's own list level with the list from the style", () => {
+    const numbering = `<w:abstractNum w:abstractNumId="0">
+      <w:lvl w:ilvl="0"><w:pPr><w:ind w:left="720"/></w:pPr></w:lvl>
+      <w:lvl w:ilvl="1"><w:pPr><w:ind w:left="1440"/></w:pPr></w:lvl></w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>`;
+    const src = handDocx(
+      '<w:p><w:pPr><w:pStyle w:val="Bullets"/><w:numPr><w:ilvl w:val="1"/></w:numPr></w:pPr></w:p>',
+      { styles: STYLES, numbering },
+    );
+    const e = explainParagraph(src, "word/document.xml", "/w:document/w:body/w:p");
+    expect(rowOf(e, "In a list").value).toContain("level 2 of list 1");
+    expect(rowOf(e, "Left indent").value).toBe("2.54 cm (72 pt)");
+  });
+
+  it("takes a style's list from its base style when the derived style only sets the level", () => {
+    const styles = `${STYLES}<w:style w:type="paragraph" w:styleId="Sub"><w:name w:val="Sub"/><w:basedOn w:val="Bullets"/>
+      <w:pPr><w:numPr><w:ilvl w:val="1"/></w:numPr></w:pPr></w:style>`;
+    const numbering = `<w:abstractNum w:abstractNumId="0">
+      <w:lvl w:ilvl="0"><w:pPr><w:ind w:left="720"/></w:pPr></w:lvl>
+      <w:lvl w:ilvl="1"><w:pPr><w:ind w:left="1440"/></w:pPr></w:lvl></w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>`;
+    const src = handDocx('<w:p><w:pPr><w:pStyle w:val="Sub"/></w:pPr></w:p>', {
+      styles,
+      numbering,
+    });
+    const e = explainParagraph(src, "word/document.xml", "/w:document/w:body/w:p");
+    expect(rowOf(e, "In a list").value).toContain("level 2 of list 1");
+  });
+
+  it("never throws on a basedOn cycle, damaged XML or huge values", () => {
+    const styles = `<w:style w:type="paragraph" w:styleId="A"><w:name w:val="A"/><w:basedOn w:val="B"/></w:style>
+      <w:style w:type="paragraph" w:styleId="B"><w:name w:val="B"/><w:basedOn w:val="A"/><w:pPr><w:ind w:left="99999999999999999999999"/></w:pPr></w:style>`;
+    const src = handDocx('<w:p><w:pPr><w:pStyle w:val="A"/></w:pPr></w:p>', { styles });
+    expect(explainParagraph(src, "word/document.xml", "/w:document/w:body/w:p")).not.toBeNull();
+    const broken = sourceFromParts({ "word/document.xml": "<w:document><w:body><w:p><w:pPr>" });
+    expect(() =>
+      explainParagraph(broken, "word/document.xml", "/w:document/w:body/w:p"),
+    ).not.toThrow();
+  });
+
+  it("explains a header paragraph using the main part's styles", () => {
+    const src = handDocx("<w:p/>", {
+      styles: STYLES,
+      extra: {
+        "word/header1.xml":
+          '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr></w:p></w:hdr>',
+      },
+    });
+    const e = explainParagraph(src, "word/header1.xml", "/w:hdr/w:p");
+    expect(rowOf(e, "Left indent").source?.label).toBe('Style "Body Text"');
+  });
+});
+
+describe("explainDocxBytes", () => {
+  it("returns null instead of throwing for bytes that are not a zip", async () => {
+    const ctx = { path: "x.docx", part: "word/document.xml", locator: "/w:document/w:body/w:p" };
+    await expect(explainDocxBytes(new Uint8Array([1, 2, 3]), ctx)).resolves.toBeNull();
   });
 });
