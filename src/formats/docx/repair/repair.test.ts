@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { handDocx } from "../test-helpers";
 import { parseXml } from "../xml";
 import { applyEdits, innerRange, offersFor, planFor, PartEditor, REPAIRS } from "./index";
+import { scrubProperties } from "./privacy";
 
 const CORE = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Plan</dc:title><dc:creator>Jane Smith</dc:creator><cp:lastModifiedBy>Bob Jones</cp:lastModifiedBy></cp:coreProperties>`;
 const APP = `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Company>Acme Ltd</Company><Manager></Manager><Pages>3</Pages></Properties>`;
@@ -66,7 +67,7 @@ describe("docx.scrub-properties", () => {
     handDocx("<w:p/>", { extra: { "docProps/core.xml": CORE, "docProps/app.xml": APP } });
 
   it("is offered with a count that holds no names", () => {
-    const offers = offersFor(src());
+    const offers = offersFor(src(), [scrubProperties]);
     expect(offers).toHaveLength(1);
     expect(offers[0]).toMatchObject({ id: "docx.scrub-properties" });
     expect(offers[0]!.summary).toBe("3 names or organisations in the properties");
@@ -94,7 +95,7 @@ describe("docx.scrub-properties", () => {
     const after = handDocx("<w:p/>", {
       extra: Object.fromEntries(plan.changes.map((c) => [c.part, c.text])),
     });
-    expect(offersFor(after)).toEqual([]);
+    expect(offersFor(after, [scrubProperties])).toEqual([]);
   });
 
   it("leaves a damaged part alone", () => {
