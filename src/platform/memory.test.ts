@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemoryPlatform } from "./memory";
-import { FileExistsError, type FileFormat } from "./platform";
+import { FileExistsError, FileTooLargeError, type FileFormat } from "./platform";
 
 const utf16: FileFormat = { encoding: "utf-16le", bom: true, eol: "lf", mixedEol: false };
 
@@ -181,5 +181,15 @@ describe("MemoryPlatform binary files", () => {
     const after = (await platform.statFile("/a/report.docx"))?.modifiedMs ?? 0;
     expect(after).toBeGreaterThan(before);
     expect([...(await platform.readBinaryFile("/a/report.docx")).bytes]).toEqual([2]);
+  });
+
+  it("refuses to read a binary file larger than maxBytes, without returning its bytes", async () => {
+    const p = new MemoryPlatform();
+    p.seedBinary("/a.bin", new Uint8Array(10));
+    expect((await p.readBinaryFile("/a.bin", { maxBytes: 10 })).bytes).toHaveLength(10);
+    await expect(p.readBinaryFile("/a.bin", { maxBytes: 9 })).rejects.toBeInstanceOf(
+      FileTooLargeError,
+    );
+    expect((await p.readBinaryFile("/a.bin")).bytes).toHaveLength(10);
   });
 });

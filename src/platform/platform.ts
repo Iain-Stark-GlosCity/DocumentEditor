@@ -77,6 +77,18 @@ export class FileExistsError extends Error {
   }
 }
 
+/** Thrown by `readBinaryFile` when the file is larger than the `maxBytes` that was asked for. */
+export class FileTooLargeError extends Error {
+  readonly code = "too-large";
+  constructor(
+    readonly path: string,
+    readonly maxBytes: number,
+  ) {
+    super(`File is larger than ${maxBytes} bytes: ${path}`);
+    this.name = "FileTooLargeError";
+  }
+}
+
 /** Files dragged from the operating system onto the window. Coordinates are CSS pixels. */
 export interface FilesDroppedEvent {
   paths: string[];
@@ -114,8 +126,14 @@ export interface Platform {
    * the part's text; for a container file whose format has a `binary` view, the text of that view.
    */
   readFile(path: string): Promise<FileData>;
-  /** Reads a file's raw bytes. */
-  readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }>;
+  /**
+   * Reads a file's raw bytes. With `maxBytes`, a larger file is refused with `FileTooLargeError`
+   * before it is loaded.
+   */
+  readBinaryFile(
+    path: string,
+    options?: { maxBytes?: number },
+  ): Promise<{ bytes: Uint8Array; modifiedMs: number }>;
   /** Present when the platform can browse container files. */
   readonly containers?: ContainerAccess;
   /** The file's modified time without reading it, or null if it does not exist. */

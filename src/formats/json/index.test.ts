@@ -103,9 +103,12 @@ describe("JSON provider", () => {
     expect(json.state.doc.toString()).toBe(jsonc.state.doc.toString());
   });
 
-  it("does not allow trailing commas in .jsonc", () => {
-    const view = editor('{"a":1,}', "/x/a.jsonc");
-    expect(command("json.format").run(view)).toBe(false);
+  it("allows trailing commas in .jsonc, keeps them, and still refuses real syntax errors", () => {
+    const view = editor('{"a":1,"b":[1,2,],}', "/x/a.jsonc");
+    expect(command("json.format").run(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('{\n  "a": 1,\n  "b": [\n    1,\n    2,\n  ],\n}');
+    const broken = editor('{"a":,}', "/x/a.jsonc");
+    expect(command("json.format").run(broken)).toBe(false);
   });
 
   it("returns true and changes nothing when the text is already formatted", () => {

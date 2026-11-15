@@ -85,7 +85,7 @@ export const jsonProvider: TextFormatProvider = {
     const indent = () => Math.round(context.setting("json.indent", 2));
     return [
       language(),
-      jsonOptions.of({ comments, indent }),
+      jsonOptions.of({ comments, trailingCommas: comments, indent }),
       dataEditing({ indent: indent(), closeBrackets: true }),
       context.setting("json.lint", true)
         ? problemChecking({ source: comments ? jsoncDiagnosticsFor : strictDiagnostics })

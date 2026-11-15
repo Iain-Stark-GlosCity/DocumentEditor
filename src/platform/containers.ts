@@ -317,14 +317,17 @@ export class ContainerPlatform implements Platform {
     return this.inner.readFile(path);
   }
 
-  async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+  async readBinaryFile(
+    path: string,
+    options?: { maxBytes?: number },
+  ): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
     if (this.partOf(path)) {
       return this.withPart(path, (archive, token, part) => ({
         bytes: archive.bytes(part),
         modifiedMs: token,
       }));
     }
-    return this.inner.readBinaryFile(path);
+    return this.inner.readBinaryFile(path, options);
   }
 
   async statFile(path: string): Promise<{ modifiedMs: number } | null> {

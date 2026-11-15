@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { joinContainerPath } from "../../core/container-path";
+import { FileTooLargeError } from "../../platform/platform";
 import type { Feature, FeatureComponentProps } from "../feature";
 import { FONT_EXTENSIONS, loadFontPreview } from "./font-preview";
 import type { Workbench } from "../workbench";
@@ -193,18 +194,22 @@ async function replacePicture(wb: Workbench, info: BinaryPartInfo): Promise<void
   }
   const path = chosen[0];
   if (path === undefined) return;
-  let bytes: Uint8Array;
-  try {
-    bytes = (await wb.platform.readBinaryFile(path)).bytes;
-  } catch (error) {
-    wb.notify({ kind: "error", message: `Could not read that file: ${errorText(error)}` });
-    return;
-  }
-  if (bytes.length > MAX_REPLACEMENT_BYTES) {
+  const tooLarge = () =>
     wb.notify({
       kind: "error",
       message: "That picture is too large (the limit is 50 MB). Nothing was changed.",
     });
+  let bytes: Uint8Array;
+  try {
+    // The limit is applied while reading, so an enormous file is never loaded.
+    bytes = (await wb.platform.readBinaryFile(path, { maxBytes: MAX_REPLACEMENT_BYTES })).bytes;
+  } catch (error) {
+    if (error instanceof FileTooLargeError) tooLarge();
+    else wb.notify({ kind: "error", message: `Could not read that file: ${errorText(error)}` });
+    return;
+  }
+  if (bytes.length > MAX_REPLACEMENT_BYTES) {
+    tooLarge();
     return;
   }
   const found = sniffPicture(bytes);

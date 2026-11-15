@@ -75,7 +75,6 @@ view (unclosed fields, hidden control characters), and the save pipeline (centra
 byte re-check before writing, atomic recovery snapshots, long file names). Open items they left,
 worth a decision or real-machine testing:
 
-- `.jsonc` treats trailing commas as an error while `.json` warns; probably backwards.
 - Tauri `csp: null` in `tauri.conf.json` (the real policy is the meta tag in `index.html`); check in
   WebView2, along with loading a font from bytes and the asset scope.
 - Notifications are not in a persistent live region; the ribbon "More" button's ARIA role; disabled
@@ -85,3 +84,8 @@ worth a decision or real-machine testing:
 - Remaining save-pipeline gaps: a tiny window between the final check and the rename; leftover
   temp files after a crash; atomic replace drops alternate data streams and ACLs.
 - After any worker error the DOCX worker stays off for the session.
+
+Since then: `.jsonc` now accepts trailing commas (checker and Format/Minify; a doubled comma or one
+after `[`, `{` or `:` is still an error), and a replacement picture is read with a size limit in the
+platform (`readBinaryFile(path, { maxBytes })`, `FileTooLargeError`, Rust `read_limited`), so an
+enormous file is refused before it is loaded.

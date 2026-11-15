@@ -126,8 +126,12 @@ pub fn write_file(app: AppHandle, path: String, text: String, format: FileFormat
 /// Reads a file's raw bytes. Returned as `tauri::ipc::Response`, so they reach the front end as an
 /// `ArrayBuffer` over the binary IPC channel (no JSON array of numbers, no base64).
 #[tauri::command]
-pub fn read_binary_file(app: AppHandle, path: String) -> Result<tauri::ipc::Response> {
-    let bytes = fs::read(&path)?;
+pub fn read_binary_file(
+    app: AppHandle,
+    path: String,
+    max_bytes: Option<u64>,
+) -> Result<tauri::ipc::Response> {
+    let bytes = binary::read_limited(std::path::Path::new(&path), max_bytes)?;
     allow_assets_beside(&app, &path);
     Ok(tauri::ipc::Response::new(bytes))
 }

@@ -91,6 +91,13 @@ describe("strict JSON diagnostics", () => {
 describe("JSON with comments diagnostics", () => {
   const check = (text: string) => jsoncDiagnostics(text, jsonLanguage.parser);
 
+  it("accepts trailing commas, but not a doubled comma", () => {
+    expect(check('{"a": 1, "b": [1, 2,], // c\n}')).toEqual([]);
+    expect(check('{"a": 1,, }').length).toBeGreaterThan(0);
+    expect(check('{"a": ,}').length).toBeGreaterThan(0);
+    expect(check("[,]").length).toBeGreaterThan(0);
+  });
+
   it("accepts both kinds of comment", () => {
     expect(check('// a\n{\n  /* b */ "a": 1, // c\n  "b": [1, /* d */ 2]\n}\n')).toEqual([]);
   });

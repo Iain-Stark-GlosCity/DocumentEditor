@@ -7,6 +7,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   isExternalUrl,
   FileExistsError,
+  FileTooLargeError,
   type FileChange,
   type FileDragPosition,
   type FilesDroppedEvent,
@@ -49,12 +50,27 @@ export class TauriPlatform implements Platform {
     return call<FileData>("read_file", { path });
   }
 
-  async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+  async readBinaryFile(
+    path: string,
+    options?: { maxBytes?: number },
+  ): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
     // The command returns `tauri::ipc::Response`, so the bytes arrive as an ArrayBuffer.
     // The time first: a change during the read then shows as a newer time on the next stat,
     // instead of the new time vouching for the old bytes (and hiding the change).
     const stat = await this.statFile(path);
-    const buffer = await call<ArrayBuffer>("read_binary_file", { path });
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await call<ArrayBuffer>("read_binary_file", { path, maxBytes: options?.maxBytes });
+    } catch (error) {
+      // The Rust side rejects with exactly `too-large` for a file over the limit.
+      if (
+        options?.maxBytes !== undefined &&
+        error instanceof Error &&
+        error.message === "too-large"
+      )
+        throw new FileTooLargeError(path, options.maxBytes);
+      throw error;
+    }
     return { bytes: new Uint8Array(buffer), modifiedMs: stat?.modifiedMs ?? 0 };
   }
 

@@ -265,6 +265,19 @@ describe("watching", () => {
   });
 });
 
+describe("reading with a size limit", () => {
+  it("passes the limit to ordinary files and ignores it for parts", async () => {
+    memory.seedBinary("/demo/big.bin", new Uint8Array(20));
+    await expect(platform.readBinaryFile("/demo/big.bin", { maxBytes: 5 })).rejects.toThrow(
+      /larger than 5 bytes/,
+    );
+    expect((await platform.readBinaryFile("/demo/big.bin", { maxBytes: 50 })).bytes).toHaveLength(
+      20,
+    );
+    expect((await platform.readBinaryFile(part("word/media/image1.png"))).bytes).toEqual(PNG);
+  });
+});
+
 describe("replacing a binary part", () => {
   const NEW_PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
 

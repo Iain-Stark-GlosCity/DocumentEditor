@@ -2,7 +2,7 @@
 //! Pure `std`, no Tauri, so it can be unit tested anywhere.
 
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 use crate::atomic::temp_beside;
@@ -18,6 +18,30 @@ impl From<io::Error> for BinaryError {
     fn from(e: io::Error) -> Self {
         BinaryError::Io(e)
     }
+}
+
+/// The text of the error `read_limited` gives for a file over the limit. The front end recognises
+/// it by this prefix (see `TauriPlatform`).
+pub const TOO_LARGE: &str = "too-large";
+
+/// Reads a file's bytes, refusing one larger than `max_bytes` (when given) without loading it: the
+/// size is checked from the file's metadata first, and the read itself is capped one byte past the
+/// limit, so a file that grows while it is read cannot get past either.
+pub fn read_limited(path: &Path, max_bytes: Option<u64>) -> io::Result<Vec<u8>> {
+    let Some(max) = max_bytes else {
+        return fs::read(path);
+    };
+    let too_large = || io::Error::new(io::ErrorKind::InvalidData, TOO_LARGE);
+    let file = fs::File::open(path)?;
+    if file.metadata()?.len() > max {
+        return Err(too_large());
+    }
+    let mut bytes = Vec::new();
+    file.take(max.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max {
+        return Err(too_large());
+    }
+    Ok(bytes)
 }
 
 /// Decodes `%XX` escapes (as produced by JavaScript's `encodeURIComponent`) into UTF-8 text.
@@ -100,6 +124,22 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn reads_up_to_the_limit_and_refuses_beyond_it() {
+        let dir = scratch("limit");
+        let file = dir.join("a.bin");
+        fs::write(&file, [7u8; 10]).unwrap();
+        assert_eq!(read_limited(&file, None).unwrap().len(), 10);
+        assert_eq!(read_limited(&file, Some(10)).unwrap().len(), 10);
+        assert_eq!(read_limited(&file, Some(100)).unwrap().len(), 10);
+        let err = read_limited(&file, Some(9)).unwrap_err();
+        assert_eq!(err.to_string(), TOO_LARGE);
+        assert_eq!(read_limited(&file, Some(0)).unwrap_err().to_string(), TOO_LARGE);
+        let missing = read_limited(&dir.join("nope"), Some(5)).unwrap_err();
+        assert_eq!(missing.kind(), io::ErrorKind::NotFound);
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

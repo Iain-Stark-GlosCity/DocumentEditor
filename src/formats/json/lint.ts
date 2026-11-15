@@ -1,7 +1,7 @@
 /**
  * JSON problems. `.json` is checked strictly (`JSON.parse`, through `jsonParseLinter`). `.jsonc`
- * allows comments, so it reports only the syntax errors of the Lezer JSON grammar, with the
- * comments blanked out first. The lang-json package is loaded when the first check runs.
+ * allows comments and trailing commas, so it reports only the syntax errors of the Lezer JSON
+ * grammar, with the comments and trailing commas blanked out first. The lang-json package is loaded when the first check runs.
  */
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorState } from "@codemirror/state";
@@ -53,7 +53,16 @@ export function maskComments(text: string): { masked: string; unterminated: numb
  */
 export function jsoncDiagnostics(text: string, parser: Parser): Diagnostic[] {
   if (text.trim() === "") return [];
-  const { masked, unterminated } = maskComments(text);
+  const { masked: commentless, unterminated } = maskComments(text);
+  // Trailing commas are valid JSON with comments (tsconfig.json, VS Code settings), so they are
+  // blanked out like the comments. The offsets are the same: only characters are replaced.
+  let masked = commentless;
+  const lenient = unterminated === null ? leniencies(text) : null;
+  if (lenient && lenient.commas.length > 0) {
+    const chars = masked.split("");
+    for (const at of lenient.commas) chars[at] = " ";
+    masked = chars.join("");
+  }
   const found: Diagnostic[] = [];
   if (unterminated !== null) {
     const { from, to } = widen(unterminated, unterminated + 2, text.length);
@@ -103,6 +112,8 @@ function leniencies(text: string): { comments: [number, number][]; commas: numbe
   const comments: [number, number][] = [];
   const commas: number[] = [];
   let pendingComma = -1;
+  // The last character that is not whitespace or inside a comment: a trailing comma follows a value.
+  let last = "";
   let i = 0;
   while (i < text.length) {
     const ch = text.charAt(i);
@@ -113,6 +124,7 @@ function leniencies(text: string): { comments: [number, number][]; commas: numbe
       }
       i = Math.min(text.length, end + 1);
       pendingComma = -1;
+      last = '"';
     } else if (ch === "/" && (text.charAt(i + 1) === "/" || text.charAt(i + 1) === "*")) {
       let end: number;
       if (text.charAt(i + 1) === "/") {
@@ -124,9 +136,11 @@ function leniencies(text: string): { comments: [number, number][]; commas: numbe
       comments.push([i, end]);
       i = end;
     } else {
-      if (ch === ",") pendingComma = i;
+      // A second comma in a row is a mistake, not a trailing comma: do not record either.
+      if (ch === ",") pendingComma = pendingComma >= 0 || !/["\]}\w.+-]/.test(last) ? -2 : i;
       else if ((ch === "}" || ch === "]") && pendingComma >= 0) commas.push(pendingComma);
       if (ch !== "," && !/\s/.test(ch)) pendingComma = -1;
+      if (!/\s/.test(ch)) last = ch;
       i++;
     }
   }

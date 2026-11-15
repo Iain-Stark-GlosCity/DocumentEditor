@@ -4,6 +4,7 @@ import {
   type FileData,
   type FileDragPosition,
   FileExistsError,
+  FileTooLargeError,
   type FileFilter,
   type FilesDroppedEvent,
   type FileFormat,
@@ -126,9 +127,14 @@ export class MemoryPlatform implements Platform {
     };
   }
 
-  async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
+  async readBinaryFile(
+    path: string,
+    options?: { maxBytes?: number },
+  ): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
     const bytes = this.binaryFiles.get(path);
     if (!bytes) throw new Error(`File not found: ${path}`);
+    if (options?.maxBytes !== undefined && bytes.length > options.maxBytes)
+      throw new FileTooLargeError(path, options.maxBytes);
     return { bytes: Uint8Array.from(bytes), modifiedMs: this.binaryModified.get(path) ?? 0 };
   }
 

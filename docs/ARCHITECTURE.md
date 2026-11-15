@@ -156,7 +156,7 @@ A zip-based file is treated as a **folder of parts**, not edited through a rich 
 |---|---|---|---|
 | markdown | md, markdown, mdown, mkd | source, live, split | live-preview mode, smart typing, tables, ribbon, image paste/drop, outline, math/Mermaid/highlight in preview |
 | text | txt, text, log (and the fallback) | source | |
-| json | json, jsonc, geojson | source | lint (comments/trailing commas are warnings in `.json`), whitespace-only Format/Minify, ribbon |
+| json | json, jsonc, geojson | source | lint (comments/trailing commas are warnings in `.json`, accepted in `.jsonc`), whitespace-only Format/Minify, ribbon |
 | yaml | yaml, yml | source | lint via the `yaml` package |
 | xml | xml, rels, xsd, xsl, xslt | source | well-formedness lint, whitespace-only Tidy, `locate`, long-line help |
 | html | html, htm | source, split | simplified sanitised preview, outline |
