@@ -233,18 +233,34 @@ export interface ParagraphStack {
   alt: Layer[] | undefined;
 }
 
+/**
+ * The style chain as layers, weakest first. A document has few styles and many paragraphs, so the
+ * layers are built once per style and shared; they are never modified. Keyed on the `Styles`
+ * object, so a different file (or a re-read of the same one) starts afresh.
+ */
+const styleLayerCache = new WeakMap<Styles, Map<string, Layer[]>>();
+
+function styleLayersOf(styles: Styles, styleId: string): Layer[] {
+  let perStyle = styleLayerCache.get(styles);
+  if (!perStyle) styleLayerCache.set(styles, (perStyle = new Map()));
+  let layers = perStyle.get(styleId);
+  if (!layers) {
+    layers = styles
+      .chain(styleId)
+      .reverse()
+      .map((def) => ({ source: { label: `Style "${def.name}"` }, pPr: child(def.el, "w:pPr") }));
+    perStyle.set(styleId, layers);
+  }
+  return layers;
+}
+
 /** The layers that format a paragraph (see the file comment). */
 export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering): ParagraphStack {
   const direct = child(p, "w:pPr");
   const styleId = child(direct, "w:pStyle")?.attrs["w:val"] ?? styles.defaults.paragraph;
 
   const layers: Layer[] = [{ source: { label: "Document defaults" }, pPr: styles.docDefaultsP }];
-  const styleLayers: Layer[] = styleId
-    ? styles
-        .chain(styleId)
-        .reverse()
-        .map((def) => ({ source: { label: `Style "${def.name}"` }, pPr: child(def.el, "w:pPr") }))
-    : [];
+  const styleLayers: Layer[] = styleId ? styleLayersOf(styles, styleId) : [];
 
   // The list the paragraph is in: its own numPr, else the style's.
   const directNum = child(direct, "w:numPr");
@@ -288,20 +304,44 @@ export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering
   return { direct, styleId, list, listLayer, main_, alt };
 }
 
-export function explainParagraph(
-  source: PartSource,
-  part: string,
-  locator: string,
-): Explanation | null {
-  const pkg = new Package(source);
-  const p = findByLocator(pkg.xml(part)?.root ?? null, locator);
-  if (!p || p.name !== "w:p") return null;
+/**
+ * The parsed package, styles and numbering that explaining a paragraph needs. Building one is the
+ * expensive part (the parts are parsed lazily and then kept); reuse it for the same bytes only.
+ */
+export interface ExplainContext {
+  pkg: Package;
+  styles: Styles;
+  numbering: Numbering;
+  stylesPart: string;
+  numberingPart: string;
+}
 
+export function prepareExplain(source: PartSource): ExplainContext {
+  const pkg = new Package(source);
   const main = pkg.mainPart;
   const stylesPart = pkg.related(main, "styles") ?? "word/styles.xml";
   const numberingPart = pkg.related(main, "numbering") ?? "word/numbering.xml";
   const styles = new Styles(pkg.xml(stylesPart)?.root);
   const numbering = new Numbering(pkg.xml(numberingPart)?.root, styles);
+  return { pkg, styles, numbering, stylesPart, numberingPart };
+}
+
+export function explainParagraph(
+  source: PartSource,
+  part: string,
+  locator: string,
+): Explanation | null {
+  return explainWith(prepareExplain(source), part, locator);
+}
+
+export function explainWith(
+  context: ExplainContext,
+  part: string,
+  locator: string,
+): Explanation | null {
+  const { pkg, styles, numbering, stylesPart, numberingPart } = context;
+  const p = findByLocator(pkg.xml(part)?.root ?? null, locator);
+  if (!p || p.name !== "w:p") return null;
 
   const partOf = (el: XElement): string => {
     let top: XElement = el;

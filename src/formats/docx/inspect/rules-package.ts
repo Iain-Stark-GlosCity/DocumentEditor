@@ -243,8 +243,9 @@ const orphans: Rule = {
   run(ctx) {
     const reached = new Set<string>();
     const queue: string[] = [""];
-    while (queue.length > 0) {
-      const part = queue.shift()!;
+    // Walk with an index: `shift()` on a long queue copies the rest each time.
+    for (let next = 0; next < queue.length; next++) {
+      const part = queue[next]!;
       for (const rel of ctx.rels(part)) {
         if (rel.external) continue;
         const stored = ctx.find(rel.target);

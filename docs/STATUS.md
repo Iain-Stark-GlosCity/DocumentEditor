@@ -49,8 +49,9 @@ Three integrity rules are flagged as uncertain until checked against real docume
   `.odttf`) show sample text in the font; metafiles (EMF/WMF) are described but not previewed.
 - The render worker bundle includes every format's editor code.
 - Tab traps focus in code formats (Escape then Tab leaves the editor).
-- `text-stats` has a timing-based test (1 MB in 2 s) that can be flaky on slow machines.
 - DOCX decode, inspect and explain run in a Web Worker; the zip is still read fully in memory.
+  Explain keeps the parsed package of the last file (reused only for byte-identical content), but the
+  pane still reads the whole file from disk and posts it to the worker on every paragraph change.
 - Markdown editing and live preview have areas that need human testing.
 
 ## Parked decisions

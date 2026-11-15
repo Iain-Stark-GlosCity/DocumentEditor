@@ -94,14 +94,37 @@ describe("countText", () => {
     });
   });
 
-  it("handles a 1 MB string in well under two seconds", () => {
+  it("counts a large string correctly", () => {
     const unit = "The quick brown fox jumps over the lazy dog.\n";
-    const text = unit.repeat(Math.ceil((1024 * 1024) / unit.length));
-    const started = performance.now();
-    const stats = countText(text);
-    const elapsed = performance.now() - started;
-    expect(stats.words).toBe(9 * (text.length / unit.length));
-    expect(elapsed).toBeLessThan(2000);
+    const copies = Math.ceil((1024 * 1024) / unit.length);
+    const stats = countText(unit.repeat(copies));
+    expect(stats.words).toBe(9 * copies);
+    expect(stats.lines).toBe(copies + 1);
+    expect(stats.characters).toBe((unit.length - 1) * copies);
+  });
+
+  it("does a bounded amount of work: segments the whole text once per count, never slices", () => {
+    // Timing is unreliable on slow or busy machines, so this counts work instead. Accidental
+    // quadratic behaviour (segmenting each line or each remaining suffix again) would feed the
+    // segmenter far more characters in total than the text holds, and that is what is checked.
+    const Original = Intl.Segmenter;
+    const fed: number[] = [];
+    class Counting extends Original {
+      override segment(input: string): Intl.Segments {
+        fed.push(input.length);
+        return super.segment(input);
+      }
+    }
+    const unit = "The quick brown fox jumps over the lazy dog.\n";
+    const text = unit.repeat(2000);
+    Reflect.set(Intl, "Segmenter", Counting);
+    try {
+      countText(text);
+    } finally {
+      Reflect.set(Intl, "Segmenter", Original);
+    }
+    // One pass for words and one for graphemes, each over the whole text.
+    expect(fed).toEqual([text.length, text.length]);
   });
 });
 
