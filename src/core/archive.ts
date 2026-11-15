@@ -109,6 +109,9 @@ interface Layout {
   readonly eocdPos: number;
   readonly commentLength: number;
   readonly zip64: boolean;
+  /** Where the last counted central header ends; anything after it up to the end of the
+   *  central directory would be lost by a rebuild. */
+  readonly headersEnd: number;
 }
 
 function view(bytes: Uint8Array): DataView {
@@ -280,7 +283,7 @@ function parseLayout(bytes: Uint8Array): Layout {
     });
     pos += length;
   }
-  return { entries, cdOffset, cdSize, eocdPos, commentLength, zip64 };
+  return { entries, cdOffset, cdSize, eocdPos, commentLength, zip64, headersEnd: pos };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -327,7 +330,9 @@ function readEntry(bytes: Uint8Array, dv: DataView, entry: RawEntry, cdOffset: n
     let inflated: Uint8Array;
     try {
       // One spare byte so that a stream which inflates to MORE than claimed is detectable.
-      inflated = inflateSync(raw, { out: new Uint8Array(size + 1) });
+      // No bytes at all is an empty entry (fflate would hand back the whole spare buffer).
+      inflated =
+        raw.length === 0 ? new Uint8Array(0) : inflateSync(raw, { out: new Uint8Array(size + 1) });
     } catch (error) {
       throw new ArchiveError(
         `"${name}" could not be decompressed (${error instanceof Error ? error.message : "corrupt data"})`,
@@ -388,6 +393,11 @@ function patchArchive(
   if (layout.cdOffset + layout.cdSize !== eocdPos) {
     throw new ArchiveError(
       "Cannot patch: unexpected data between the central directory and the end record",
+    );
+  }
+  if (layout.headersEnd !== eocdPos) {
+    throw new ArchiveError(
+      "Cannot patch: the central directory holds data beyond the entries it counts (for example a signature)",
     );
   }
   const matching = entries.filter((e) => e.info.name === name);

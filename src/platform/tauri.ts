@@ -51,8 +51,10 @@ export class TauriPlatform implements Platform {
 
   async readBinaryFile(path: string): Promise<{ bytes: Uint8Array; modifiedMs: number }> {
     // The command returns `tauri::ipc::Response`, so the bytes arrive as an ArrayBuffer.
-    const buffer = await call<ArrayBuffer>("read_binary_file", { path });
+    // The time first: a change during the read then shows as a newer time on the next stat,
+    // instead of the new time vouching for the old bytes (and hiding the change).
     const stat = await this.statFile(path);
+    const buffer = await call<ArrayBuffer>("read_binary_file", { path });
     return { bytes: new Uint8Array(buffer), modifiedMs: stat?.modifiedMs ?? 0 };
   }
 

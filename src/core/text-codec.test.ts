@@ -80,3 +80,102 @@ describe("decodePartText", () => {
     expect(decodePartText(Uint8Array.from([0xfe, 0xff, 0x00, 0x61])).text).toBe("a");
   });
 });
+
+describe("byte-exact round trips of real-world inputs", () => {
+  const u8 = (...parts: Array<string | number[]>): Uint8Array =>
+    Uint8Array.from(
+      parts.flatMap((p) => (typeof p === "string" ? [...new TextEncoder().encode(p)] : p)),
+    );
+  const utf16 = (text: string, little: boolean, bom: boolean): Uint8Array => {
+    const out = new Uint8Array((bom ? 2 : 0) + text.length * 2);
+    const view = new DataView(out.buffer);
+    if (bom) view.setUint16(0, 0xfeff, little);
+    for (let i = 0; i < text.length; i++) {
+      view.setUint16((bom ? 2 : 0) + i * 2, text.charCodeAt(i), little);
+    }
+    return out;
+  };
+  const BOM8 = [0xef, 0xbb, 0xbf];
+  /** Byte equality across realms (jsdom's TextEncoder returns another realm's Uint8Array). */
+  const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  };
+
+  const cases: Array<[string, Uint8Array]> = [
+    ["empty", new Uint8Array(0)],
+    ["UTF-8 BOM only", u8(BOM8)],
+    ["two UTF-8 BOMs (the second is text)", u8(BOM8, BOM8, "a")],
+    ["CRLF with a final newline", u8("a\r\nb\r\n")],
+    ["CRLF without a final newline", u8("a\r\nb")],
+    ["LF without a final newline", u8("a\nb")],
+    ["a lone newline", u8("\n")],
+    ["a lone CRLF", u8("\r\n")],
+    ["old Mac CR only", u8("a\rb\rc")],
+    ["CR before CRLF", u8("a\r\r\nb\r\r\n")],
+    ["U+2028 and U+2029 are text, not line breaks", u8("a b c\n")],
+    ["NUL bytes", u8([0], "a", [0, 0], "\n")],
+    ["UTF-16LE without a BOM reads as UTF-8 with NULs", utf16("ab\r\n", true, false)],
+    ["UTF-8 BOM with CRLF", u8(BOM8, "x\r\ny\r\n")],
+    ["UTF-16LE with CRLF and an astral character", utf16("a\r\n\u{1F600}\r\n", true, true)],
+    ["UTF-16BE with LF and U+2028", utf16("a\n \nz", false, true)],
+    ["UTF-16LE BOM only", utf16("", true, true)],
+    ["UTF-16BE CR only", utf16("a\rb", false, true)],
+  ];
+  for (const [label, bytes] of cases) {
+    it(label, () => {
+      const { text, format } = decodePartText(bytes);
+      expect(format.mixedEol).toBe(false);
+      expect(sameBytes(encodePartText(text, format), bytes)).toBe(true);
+    });
+  }
+
+  it("round-trips large files exactly (8 MB UTF-8 CRLF, 8 MB UTF-16LE)", () => {
+    const line = "<w:p>Paragraph with café and \u{1F600}</w:p>\r\n";
+    const big = line.repeat(Math.ceil((8 * 1024 * 1024) / line.length));
+    const utf8 = new TextEncoder().encode(big);
+    const decoded = decodePartText(utf8);
+    expect(decoded.format.eol).toBe("crlf");
+    expect(decoded.text.includes("\r")).toBe(false);
+    expect(sameBytes(encodePartText(decoded.text, decoded.format), utf8)).toBe(true);
+    const wide = utf16(big, true, true);
+    const back = decodePartText(wide);
+    expect(back.format.encoding).toBe("utf-16le");
+    expect(sameBytes(encodePartText(back.text, back.format), wide)).toBe(true);
+  });
+
+  it("refuses every invalid UTF-8 form rather than replacing it", () => {
+    for (const bad of [
+      [0xc0, 0x80], // overlong NUL
+      [0xed, 0xa0, 0x80], // a surrogate encoded in UTF-8
+      [0xf8, 0x88, 0x80, 0x80, 0x80], // five-byte form
+      [0xf4, 0x90, 0x80, 0x80], // above U+10FFFF
+      [0x61, 0xe2, 0x82], // truncated at the end
+    ]) {
+      expect(() => decodePartText(Uint8Array.from(bad)), bad.join(",")).toThrow(/UTF-8/);
+    }
+  });
+
+  it("normalises mixed endings only when it says so (mixedEol), to the dominant style", () => {
+    const { text, format } = decodePartText(u8("a\r\nb\r\nc\n"));
+    expect(format).toMatchObject({ eol: "crlf", mixedEol: true });
+    expect(sameBytes(encodePartText(text, format), u8("a\r\nb\r\nc\r\n"))).toBe(true);
+  });
+
+  it("refuses to encode text with an unpaired surrogate instead of corrupting it", () => {
+    const formats: FileFormat[] = [
+      { encoding: "utf-8", bom: false, eol: "lf", mixedEol: false },
+      { encoding: "utf-16le", bom: true, eol: "lf", mixedEol: false },
+      { encoding: "utf-16be", bom: true, eol: "crlf", mixedEol: false },
+    ];
+    for (const format of formats) {
+      for (const bad of ["a\uD800b", "a\uDC00", "\uD83D", "x\uDE00\uD83D"]) {
+        expect(() => encodePartText(bad, format), format.encoding).toThrow(/unpaired surrogate/);
+      }
+      // A proper pair is fine, and reads back exactly.
+      const ok = encodePartText("a😀b", format);
+      expect(decodePartText(ok).text).toBe("a😀b");
+    }
+  });
+});

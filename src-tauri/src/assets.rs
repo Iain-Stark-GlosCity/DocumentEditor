@@ -21,7 +21,8 @@ impl<'a> SplitPath<'a> {
         let mut unc = false;
         if text.starts_with(r"\\?\") {
             i = 4;
-            if text[i..].len() >= 4 && text[i..i + 4].eq_ignore_ascii_case(r"UNC\") {
+            // Compare bytes: slicing the `str` could split a multi-byte character and panic.
+            if b.get(i..i + 4).is_some_and(|s| s.eq_ignore_ascii_case(br"UNC\")) {
                 unc = true;
                 i += 4;
             }
@@ -173,5 +174,12 @@ mod tests {
         assert_eq!(dirs(r"\\?\C:\Users\name\notes\a.md"), vec![r"\\?\C:\Users\name\notes"]);
         assert_eq!(dirs(r"\\?\C:\Work\docs\a.md"), vec![r"\\?\C:\Work\docs", r"\\?\C:\Work"]);
         assert_eq!(dirs(r"\\?\UNC\server\share\docs\a.md"), vec![r"\\?\UNC\server\share\docs"]);
+    }
+
+    #[test]
+    fn never_panics_on_non_ascii_after_a_verbatim_prefix() {
+        // A slice of `text` at byte 8 would cut the 3-byte `€` in half (a panic, which aborts).
+        assert_eq!(dirs(r"\\?\ab€\c\d.md"), vec![r"\\?\ab€\c", r"\\?\ab€"]);
+        assert!(dirs("\\\\?\\é").is_empty());
     }
 }

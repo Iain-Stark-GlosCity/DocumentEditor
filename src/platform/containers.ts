@@ -74,6 +74,17 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
+/**
+ * The key that serialises work on a container. Windows paths (a drive letter or a UNC share) are
+ * case-insensitive and accept either slash, so `C:\Docs\a.docx` and `c:/docs/A.docx` must share
+ * one queue, or two saves could each patch the same old bytes and the second would undo the first.
+ */
+function containerKey(container: string): string {
+  return /^(?:[a-z]:[\\/]|[\\/]{2})/i.test(container)
+    ? container.replaceAll("/", "\\").toLowerCase()
+    : container;
+}
+
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
@@ -210,12 +221,13 @@ export class ContainerPlatform implements Platform {
 
   /** Runs `task` after everything queued before it for this container has finished. */
   private serialised<T>(container: string, task: () => Promise<T>): Promise<T> {
-    const previous = this.chains.get(container) ?? Promise.resolve();
+    const key = containerKey(container);
+    const previous = this.chains.get(key) ?? Promise.resolve();
     const run = previous.then(task, task);
     const tail = run.catch(() => undefined);
-    this.chains.set(container, tail);
+    this.chains.set(key, tail);
     void tail.then(() => {
-      if (this.chains.get(container) === tail) this.chains.delete(container);
+      if (this.chains.get(key) === tail) this.chains.delete(key);
     });
     return run;
   }
@@ -377,7 +389,14 @@ export class ContainerPlatform implements Platform {
         throw new Error(`${part} is a binary part and cannot be saved as text`);
       }
 
-      const bytes = encodePartText(text, format);
+      let bytes: Uint8Array;
+      try {
+        bytes = encodePartText(text, format);
+      } catch (error) {
+        throw new Error(`Could not save ${part}: ${describe(error)}. Nothing was saved.`, {
+          cause: error,
+        });
+      }
       if (XML_EXTENSIONS.has(partExtension(part))) {
         const problem = xmlProblem(text);
         if (problem) {
@@ -394,10 +413,18 @@ export class ContainerPlatform implements Platform {
       verifyPatched(archive, patched, part, bytes);
 
       // Another program may have written the file since we read it; do not overwrite that.
+      // The time alone is not proof: FAT keeps it to 2 seconds and some programs restore it.
+      // So the bytes on disk must still be the ones that were patched.
+      const changed = new Error(`${file} changed on disk while saving ${part}. Nothing was saved.`);
       const before = await this.inner.statFile(container);
-      if (!before || before.modifiedMs !== fresh.modifiedMs) {
-        throw new Error(`${file} changed on disk while saving ${part}. Nothing was saved.`);
+      if (!before || before.modifiedMs !== fresh.modifiedMs) throw changed;
+      let current: Uint8Array;
+      try {
+        current = (await this.inner.readBinaryFile(container)).bytes;
+      } catch {
+        throw changed;
       }
+      if (!sameBytes(current, fresh.bytes)) throw changed;
 
       if (!this.backedUp.has(container)) {
         try {

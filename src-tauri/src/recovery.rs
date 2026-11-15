@@ -14,9 +14,37 @@ pub struct RecoverySnapshot {
     pub provider_id: Option<String>,
 }
 
+/// Writes a snapshot atomically. A plain write cut short (a crash or power loss, which is when
+/// recovery matters) would leave a truncated file that replaced the last good snapshot.
+pub fn write_snapshot(file: &std::path::Path, snapshot: &RecoverySnapshot) -> std::io::Result<()> {
+    crate::atomic::atomic_write(file, &serde_json::to_vec(snapshot)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn writes_snapshots_whole_and_leaves_only_the_json_file() {
+        let dir = std::env::temp_dir().join(format!("docedit-recovery-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("rec-a.json");
+        let mut s = RecoverySnapshot {
+            id: "rec-a".into(),
+            path: None,
+            text: "x".repeat(10_000),
+            saved_ms: 1,
+            provider_id: None,
+        };
+        write_snapshot(&file, &s).unwrap();
+        s.text = "short".into();
+        write_snapshot(&file, &s).unwrap();
+        let back: RecoverySnapshot = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(back, s);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn old_snapshot_without_provider_id_still_loads() {
