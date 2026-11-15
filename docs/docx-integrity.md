@@ -558,23 +558,29 @@ Text you cannot see, markers that do not pair up, and paragraphs buried in direc
 
 - **Severity:** info
 - **Checks:** in the main body, list paragraphs (the list comes from the paragraph or its style)
-  whose own `w:ind` sets a left indent, hanging or first-line value different from the list
-  level's. Paragraphs are resolved with the same layers as Explain this paragraph.
+  whose own `w:ind` sets a left (or start) indent, or a first-line or hanging indent, that differs
+  from the value the list level itself sets. Hanging and first line are compared as one signed
+  value, so a direct `w:firstLine="0"` over a level's hanging indent is a difference. Paragraphs
+  are resolved with the same layers as Explain this paragraph.
 - **Why:** the list level decides where the number and text sit; a direct indent moves one item
   out of line with the rest, usually from nudging it by hand.
 - **Does not flag:** a direct indent equal to the level's; list paragraphs with no indent of their
-  own; a list whose level is not defined (reported by the numbering rules).
+  own; a value the level does not set (nothing is overridden); a list whose level is not defined
+  (reported by the numbering rules).
 - **Example:** one bullet in a list with `w:ind w:left="1440"` where the level says 720.
 
 ### `formatting.extreme-indent`
 
 - **Severity:** warning
-- **Checks:** in the main body, outside tables, paragraphs whose effective left or right indent is
-  negative, or whose left plus right indent reaches 80% of the last section's text width (page
-  width minus left and right margins).
+- **Checks:** in the main body, outside tables and text boxes, paragraphs whose effective left or
+  right indent is negative, or whose left plus right indent reaches 80% of the text width of the
+  paragraph's own section (page width minus margins and gutter; the narrowest column when the
+  section has several).
 - **Why:** the text is pushed into the margin or squeezed into a narrow column.
-- **Does not flag:** paragraphs in tables (cell widths are not resolved); anything when the last
-  section states no page width. Sections other than the last are not used for the width.
+- **Does not flag:** paragraphs in tables (cell widths are not resolved) or text boxes; a side
+  stated in character units (Word uses those instead of the twips); the width test for a section
+  that states no page width (a negative indent is still reported). A hanging indent alone is not
+  flagged, since only the left and right indents are summed.
 - **Example:** a paragraph with `w:ind w:left="9000"` on an A4 page with 1-inch margins.
 
 ---

@@ -28,6 +28,28 @@ export interface Layer {
 const TWIPS_PER_PT = 20;
 const TWIPS_PER_CM = 567;
 
+/**
+ * A twip measure as Word reads it: a whole number of twips, or (Strict) a number with a unit
+ * (mm, cm, in, pt, pc, pi). Anything else, including an empty string, hex or exponent form, is not
+ * a measure and gives undefined, so a damaged value never counts as zero.
+ */
+export function parseTwips(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*(mm|cm|in|pt|pc|pi)?\s*$/.exec(raw);
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  const perUnit: Record<string, number> = {
+    mm: 1440 / 25.4,
+    cm: 1440 / 2.54,
+    in: 1440,
+    pt: 20,
+    pc: 240,
+    pi: 240,
+  };
+  const twips = m[2] ? n * perUnit[m[2]]! : n;
+  return Number.isFinite(twips) ? Math.round(twips) : undefined;
+}
+
 export function describeTwips(twips: number): string {
   const cm = twips / TWIPS_PER_CM;
   const pt = twips / TWIPS_PER_PT;
@@ -64,8 +86,8 @@ function twipsReader(read: ReturnType<typeof attr>): Reader {
   return (pPr) => {
     const hit = read(pPr);
     if (!hit) return undefined;
-    const n = Number(hit.raw);
-    return Number.isFinite(n) ? { value: describeTwips(n), el: hit.el } : undefined;
+    const n = parseTwips(hit.raw);
+    return n !== undefined ? { value: describeTwips(n), el: hit.el } : undefined;
   };
 }
 
@@ -73,12 +95,12 @@ function twipsReader(read: ReturnType<typeof attr>): Reader {
 const firstLine: Reader = (pPr) => {
   const ind = child(pPr, "w:ind");
   if (!ind) return undefined;
-  const hanging = ind.attrs["w:hanging"];
-  const first = ind.attrs["w:firstLine"];
-  if (hanging !== undefined && Number(hanging) !== 0 && Number.isFinite(Number(hanging)))
-    return { value: `hanging ${describeTwips(Number(hanging))}`, el: ind };
-  if (first !== undefined && Number.isFinite(Number(first)) && Number(first) !== 0)
-    return { value: `first line ${describeTwips(Number(first))}`, el: ind };
+  const hanging = parseTwips(ind.attrs["w:hanging"]);
+  const first = parseTwips(ind.attrs["w:firstLine"]);
+  if (hanging !== undefined && hanging !== 0)
+    return { value: `hanging ${describeTwips(hanging)}`, el: ind };
+  if (first !== undefined && first !== 0)
+    return { value: `first line ${describeTwips(first)}`, el: ind };
   if (hanging !== undefined || first !== undefined) return { value: "none", el: ind };
   return undefined;
 };
@@ -225,6 +247,8 @@ function withFix(row: ExplanationRow, group: string): ExplanationRow {
 export interface ParagraphStack {
   direct: XElement | undefined;
   styleId: string | undefined;
+  /** The style id the paragraph names when no such style is defined. */
+  missingStyle?: string;
   list: { numId: string; ilvl: number; fromStyle: boolean } | undefined;
   listLayer: Layer | undefined;
   /** Layers weakest first, in the order we believe Word applies them. */
@@ -233,10 +257,34 @@ export interface ParagraphStack {
   alt: Layer[] | undefined;
 }
 
+/**
+ * The list a paragraph style gives, following `basedOn`: the numId and the level are inherited
+ * separately, so a style that only sets `w:ilvl` keeps its base style's list.
+ */
+function styleNumbering(
+  styles: Styles,
+  styleId: string | undefined,
+): { numId: string; ilvl: number } | undefined {
+  if (styleId === undefined) return undefined;
+  let numId: string | undefined;
+  let ilvl = 0;
+  for (const def of styles.chain(styleId).reverse()) {
+    const numPr = child(child(def.el, "w:pPr"), "w:numPr");
+    const id = child(numPr, "w:numId")?.attrs["w:val"];
+    if (id !== undefined) numId = id;
+    const lvl = child(numPr, "w:ilvl")?.attrs["w:val"];
+    if (lvl !== undefined) ilvl = Number(lvl) || 0;
+  }
+  return numId === undefined ? undefined : { numId, ilvl };
+}
+
 /** The layers that format a paragraph (see the file comment). */
 export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering): ParagraphStack {
   const direct = child(p, "w:pPr");
-  const styleId = child(direct, "w:pStyle")?.attrs["w:val"] ?? styles.defaults.paragraph;
+  const named = child(direct, "w:pStyle")?.attrs["w:val"];
+  // A paragraph style that is not defined is treated as the default style.
+  const missingStyle = named !== undefined && !styles.get(named) ? named : undefined;
+  const styleId = named !== undefined && !missingStyle ? named : styles.defaults.paragraph;
 
   const layers: Layer[] = [{ source: { label: "Document defaults" }, pPr: styles.docDefaultsP }];
   const styleLayers: Layer[] = styleId
@@ -249,17 +297,23 @@ export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering
   // The list the paragraph is in: its own numPr, else the style's.
   const directNum = child(direct, "w:numPr");
   const directNumId = child(directNum, "w:numId")?.attrs["w:val"];
-  const styleNum = styleId ? styles.numbering(styleId) : undefined;
+  const styleNum = styleNumbering(styles, styleId);
+  const directIlvl = child(directNum, "w:ilvl")?.attrs["w:val"];
   let list: { numId: string; ilvl: number; fromStyle: boolean } | undefined;
   if (directNumId !== undefined) {
     if (directNumId !== "0")
       list = {
         numId: directNumId,
-        ilvl: Number(child(directNum, "w:ilvl")?.attrs["w:val"] ?? styleNum?.ilvl ?? 0) || 0,
+        ilvl: Number(directIlvl ?? styleNum?.ilvl ?? 0) || 0,
         fromStyle: false,
       };
   } else if (styleNum && styleNum.numId !== "0") {
-    list = { ...styleNum, fromStyle: true };
+    // The list is the style's; a level written on the paragraph alone still applies.
+    list = {
+      numId: styleNum.numId,
+      ilvl: directIlvl !== undefined ? Number(directIlvl) || 0 : styleNum.ilvl,
+      fromStyle: true,
+    };
   }
 
   let listLayer: Layer | undefined;
@@ -285,7 +339,7 @@ export function paragraphStack(p: XElement, styles: Styles, numbering: Numbering
   const main_ = order(listLayer !== undefined && list!.fromStyle);
   const alt = listLayer && list!.fromStyle ? order(false) : undefined;
 
-  return { direct, styleId, list, listLayer, main_, alt };
+  return { direct, styleId, missingStyle, list, listLayer, main_, alt };
 }
 
 export function explainParagraph(
@@ -312,7 +366,7 @@ export function explainParagraph(
   };
 
   const stack = paragraphStack(p, styles, numbering);
-  const { direct, styleId, list, listLayer, main_, alt } = stack;
+  const { direct, styleId, missingStyle, list, listLayer, main_, alt } = stack;
   const notes: string[] = [];
   if (list && !listLayer)
     notes.push(`The list this paragraph uses (${list.numId}) has no definition for its level.`);
@@ -357,7 +411,12 @@ export function explainParagraph(
     rows: [
       {
         label: "Paragraph style",
-        value: styleId ? styles.name(styleId) : "none (Word's Normal)",
+        value:
+          missingStyle !== undefined
+            ? `${missingStyle} (not defined in this file; Word uses ${styleId ? styles.name(styleId) : "Normal"})`
+            : styleId
+              ? styles.name(styleId)
+              : "none (Word's Normal)",
       },
     ],
   });
@@ -380,23 +439,31 @@ export function explainParagraph(
   return { title: "Paragraph formatting", sections, notes };
 }
 
-/** The effective left or right indent in twips, and the layer that set it. */
+/**
+ * The effective left or right indent in twips, and the layer that set it. `inChars` is true when
+ * that layer also states the side in character units, which Word uses instead of the twips.
+ */
 export function effectiveIndent(
   stack: ParagraphStack,
   side: "left" | "right",
-): { twips: number; layer: string } | undefined {
+): { twips: number; layer: string; inChars: boolean } | undefined {
   const names = side === "left" ? ["w:left", "w:start"] : ["w:right", "w:end"];
-  let out: { twips: number; layer: string } | undefined;
+  const charNames = names.map((n) => `${n}Chars`);
+  let out: { twips: number; layer: string; inChars: boolean } | undefined;
   for (const layer of stack.main_) {
     const ind = child(layer.pPr, "w:ind");
     if (!ind) continue;
+    const inChars = charNames.some((n) => ind.attrs[n] !== undefined);
+    let found = false;
     for (const name of names) {
-      const n = Number(ind.attrs[name]);
-      if (ind.attrs[name] !== undefined && Number.isFinite(n)) {
-        out = { twips: n, layer: layer.source.label };
+      const n = parseTwips(ind.attrs[name]);
+      if (n !== undefined) {
+        out = { twips: n, layer: layer.source.label, inChars };
+        found = true;
         break;
       }
     }
+    if (!found && inChars) out = { twips: 0, layer: layer.source.label, inChars };
   }
   return out;
 }

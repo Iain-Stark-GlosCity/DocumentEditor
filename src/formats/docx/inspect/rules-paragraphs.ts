@@ -2,7 +2,7 @@
  * Rules that need a paragraph's effective formatting, resolved through document defaults, list
  * level, style chain and direct formatting (see ../explain.ts). Read from the main document only.
  */
-import { effectiveIndent, paragraphStack } from "../explain";
+import { effectiveIndent, paragraphStack, parseTwips } from "../explain";
 import { Numbering } from "../numbering";
 import { Styles } from "../styles";
 import { child, type XElement } from "../xml";
@@ -35,25 +35,42 @@ function models(ctx: InspectContext): Models | null {
 
 const num = (el: XElement | undefined, ...names: string[]): number | undefined => {
   for (const name of names) {
-    const raw = el?.attrs[name];
-    if (raw !== undefined && Number.isFinite(Number(raw))) return Number(raw);
+    const n = parseTwips(el?.attrs[name]);
+    if (n !== undefined) return n;
   }
   return undefined;
 };
 
-/** Text width in twips of the document's last section, if it states a page and margins. */
-function textWidth(ctx: InspectContext, main: string): number | undefined {
-  const sects = ctx
-    .all(main, "w:sectPr")
-    .filter((s) => !s.parent || s.parent.name !== "w:pPrChange");
-  const sect = sects[sects.length - 1];
+/**
+ * First-line indent as one signed number (positive first line, negative hanging), so a hanging
+ * indent and a first-line indent compare like with like. Undefined when `w:ind` states neither.
+ */
+function firstLineOf(ind: XElement | undefined): number | undefined {
+  const hanging = num(ind, "w:hanging");
+  const first = num(ind, "w:firstLine");
+  if (hanging !== undefined && hanging !== 0) return -hanging;
+  if (first !== undefined) return first;
+  return hanging;
+}
+
+/** Text width in twips of a section, less its gutter; for several columns, the narrowest column. */
+function columnWidth(sect: XElement | undefined): number | undefined {
   const width = num(child(sect, "w:pgSz"), "w:w");
   const mar = child(sect, "w:pgMar");
-  const left = num(mar, "w:left") ?? 0;
-  const right = num(mar, "w:right") ?? 0;
   if (width === undefined) return undefined;
-  const text = width - left - right;
-  return text > 0 ? text : undefined;
+  const text =
+    width - (num(mar, "w:left") ?? 0) - (num(mar, "w:right") ?? 0) - (num(mar, "w:gutter") ?? 0);
+  if (!(text > 0)) return undefined;
+  const cols = child(sect, "w:cols");
+  const count = Math.floor(num(cols, "w:num") ?? 1);
+  if (count <= 1) return text;
+  const listed = (cols?.children ?? [])
+    .filter((c): c is XElement => typeof c !== "string" && c.name === "w:col")
+    .map((c) => num(c, "w:w"))
+    .filter((w): w is number => w !== undefined && w > 0);
+  if (listed.length > 0 && cols?.attrs["w:equalWidth"] !== "1") return Math.min(...listed);
+  const col = (text - (num(cols, "w:space") ?? 720) * (count - 1)) / count;
+  return col > 0 ? col : undefined;
 }
 
 const overridesList: Rule = {
@@ -70,11 +87,14 @@ const overridesList: Rule = {
       const stack = paragraphStack(p, m.styles, m.numbering);
       if (!stack.list || !stack.listLayer) continue;
       const level = child(stack.listLayer.pPr, "w:ind");
-      const differs = (names: string[]) => {
-        const mine = num(ind, ...names);
-        return mine !== undefined && mine !== (num(level, ...names) ?? 0);
-      };
-      if (differs(["w:left", "w:start"]) || differs(["w:hanging"]) || differs(["w:firstLine"]))
+      // Only a value the level itself sets can be overridden, and only like with like: start
+      // against left, and the signed first-line value (hanging against first line).
+      const differs = (mine: number | undefined, theirs: number | undefined) =>
+        mine !== undefined && theirs !== undefined && mine !== theirs;
+      if (
+        differs(num(ind, "w:left", "w:start"), num(level, "w:left", "w:start")) ||
+        differs(firstLineOf(ind), firstLineOf(level))
+      )
         hits.push({ part: m.main, el: p, label: "paragraph" });
     }
     if (hits.length === 0) return;
@@ -97,17 +117,38 @@ const extreme: Rule = {
   run(ctx) {
     const m = models(ctx);
     if (!m) return;
-    const width = textWidth(ctx, m.main);
-    if (width === undefined) return;
+    const body = child(ctx.xml(m.main)?.root, "w:body");
+    const paragraphs = ctx.all(m.main, "w:p");
+    // A section's properties sit in the last paragraph of that section; the final section's in the
+    // body. Walking backwards, the first section break at or after a paragraph is its section's.
+    const widths = new Map<XElement, number | undefined>();
+    let sect = child(body, "w:sectPr");
+    for (let i = paragraphs.length - 1; i >= 0; i--) {
+      const p = paragraphs[i]!;
+      sect = child(child(p, "w:pPr"), "w:sectPr") ?? sect;
+      widths.set(p, columnWidth(sect));
+    }
     const hits: Hit[] = [];
-    for (const p of ctx.all(m.main, "w:p")) {
-      // Paragraphs in tables are laid out inside cells whose width we do not resolve.
-      if (ancestor(p, "w:tc")) continue;
+    let shown: number | undefined;
+    for (const p of paragraphs) {
+      // Tables and text boxes lay their paragraphs out in a width we do not resolve.
+      if (ancestor(p, "w:tc") || ancestor(p, "w:txbxContent")) continue;
       const stack = paragraphStack(p, m.styles, m.numbering);
-      const left = effectiveIndent(stack, "left")?.twips ?? 0;
-      const right = effectiveIndent(stack, "right")?.twips ?? 0;
-      if (left < 0 || right < 0 || left + right >= width * EXTREME_FRACTION)
+      const l = effectiveIndent(stack, "left");
+      const r = effectiveIndent(stack, "right");
+      // Word uses character units, when stated, instead of the twips.
+      if (l?.inChars || r?.inChars) continue;
+      const left = l?.twips ?? 0;
+      const right = r?.twips ?? 0;
+      const width = widths.get(p);
+      if (
+        left < 0 ||
+        right < 0 ||
+        (width !== undefined && left + right >= width * EXTREME_FRACTION)
+      ) {
         hits.push({ part: m.main, el: p, label: "paragraph" });
+        shown ??= width;
+      }
     }
     if (hits.length === 0) return;
     ctx.report({
@@ -118,7 +159,7 @@ const extreme: Rule = {
       why: "The indents of these paragraphs, once the style, list and direct formatting are combined, are negative or take up most of the page width. The text may be squeezed into a narrow column or pushed into the margin. Open Explain this paragraph to see where each value comes from.",
       key: "extreme",
       hits: hits.slice(0, MAX_HITS),
-      facts: { count: hits.length, textWidthTwips: width },
+      facts: { count: hits.length, ...(shown !== undefined ? { textWidthTwips: shown } : {}) },
     });
   },
 };

@@ -8,22 +8,27 @@ export async function explainDocxBytes(
   bytes: Uint8Array,
   context: { path: string; part: string; locator: string },
 ): Promise<Explanation | null> {
-  const zip = readZip(bytes);
-  const names = zip.entries.filter((e) => !e.isDirectory).map((e) => e.name);
-  return explainParagraph(
-    {
-      names: () => names,
-      text(name) {
-        const info = zip.info(name);
-        if (!info || info.isDirectory) return undefined;
-        try {
-          return decodePart(zip.bytes(name));
-        } catch {
-          return undefined;
-        }
+  try {
+    const zip = readZip(bytes);
+    const names = zip.entries.filter((e) => !e.isDirectory).map((e) => e.name);
+    return explainParagraph(
+      {
+        names: () => names,
+        text(name) {
+          const info = zip.info(name);
+          if (!info || info.isDirectory) return undefined;
+          try {
+            return decodePart(zip.bytes(name));
+          } catch {
+            return undefined;
+          }
+        },
       },
-    },
-    context.part,
-    context.locator,
-  );
+      context.part,
+      context.locator,
+    );
+  } catch {
+    // Bytes that are not a readable package explain nothing; never throw into the pane.
+    return null;
+  }
 }
