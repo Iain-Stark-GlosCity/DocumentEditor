@@ -48,7 +48,7 @@ Three integrity rules are flagged as uncertain until checked against real docume
 - The render worker bundle includes every format's editor code.
 - Tab traps focus in code formats (Escape then Tab leaves the editor).
 - `text-stats` has a timing-based test (1 MB in 2 s) that can be flaky on slow machines.
-- DOCX decode and inspect run on the main thread; very large files may stall the UI briefly.
+- DOCX decode, inspect and explain run in a Web Worker; the zip is still read fully in memory.
 - Markdown editing and live preview have areas that need human testing.
 
 ## Parked decisions

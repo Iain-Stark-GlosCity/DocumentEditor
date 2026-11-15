@@ -21,16 +21,16 @@ export const docxProvider: TextFormatProvider = {
   binary: {
     archive: "zip",
     async decode(bytes, context) {
-      const { decodeDocx } = await import("./decode");
-      return decodeDocx(bytes, context);
+      const { callDocx } = await import("./worker-client");
+      return callDocx("decode", bytes, { path: context.path });
     },
     async inspect(bytes, context) {
-      const { inspectDocxBytes } = await import("./inspect");
-      return inspectDocxBytes(bytes, context);
+      const { callDocx } = await import("./worker-client");
+      return callDocx("inspect", bytes, { path: context.path });
     },
     async explain(bytes, context) {
-      const { explainDocxBytes } = await import("./explain-bytes");
-      return explainDocxBytes(bytes, context);
+      const { callDocx } = await import("./worker-client");
+      return callDocx("explain", bytes, context);
     },
   },
   // The view's headings are ATX Markdown on the same Lezer grammar, so the Markdown outline

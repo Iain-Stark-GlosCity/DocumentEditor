@@ -89,3 +89,10 @@ test("the repair removes the paragraph's own indent as an undoable edit, saved s
   expect(changed).toEqual(["word/document.xml"]);
   expect(strFromU8(after["word/document.xml"] ?? new Uint8Array())).not.toContain("<w:ind");
 });
+
+test("reading a Word file happens in a Web Worker, not on the page's thread", async ({ app }) => {
+  const started = app.waitForEvent("worker", (w) => w.url().includes("docx.worker"));
+  await openDocx(app, "explain.docx", await makeDocx());
+  await started;
+  await expect(app.locator(".cm-content")).toContainText("Indented paragraph");
+});
