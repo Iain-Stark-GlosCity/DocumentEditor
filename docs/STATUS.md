@@ -92,3 +92,11 @@ Since then: `.jsonc` now accepts trailing commas (checker and Format/Minify; a d
 after `[`, `{` or `:` is still an error), and a replacement picture is read with a size limit in the
 platform (`readBinaryFile(path, { maxBytes })`, `FileTooLargeError`, Rust `read_limited`), so an
 enormous file is refused before it is loaded.
+
+Clean-ups were reviewed adversarially (11 defects fixed, see docs/docx-repairs.md). Still open: not
+tested in real Word (emptied comment parts, anonymised people.xml, emptied TitlesOfParts entry);
+the Integrity pane does not re-run after a clean-up in the browser build (the desktop watcher
+should); repairs parse whole parts with no size cap; a deleted field split across several `w:del`
+elements is skipped (safe, but left in place); the glossary part is not covered; private data the
+clean-ups do not reach is listed in docs/docx-repairs.md (typed names in text, `customXml/`,
+`docMetadata/LabelInfo.xml`, document variables).
