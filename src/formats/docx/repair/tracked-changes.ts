@@ -17,7 +17,7 @@
  */
 import { isOn } from "../notation";
 import { child, elements, type XElement } from "../xml";
-import { applyEdits, innerRange, type TextEdit } from "./splice";
+import { applyEdits, innerRange, tagEnd, type TextEdit } from "./splice";
 import type { RepairContext, RepairDef, RepairResult } from "./types";
 
 type Mode = "accept" | "reject";
@@ -36,6 +36,7 @@ type SkipKind =
   | "vmerge"
   | "emptyTable"
   | "field"
+  | "reference"
   | "unusual"
   | "failed";
 
@@ -78,6 +79,11 @@ const SKIP_WORDS: Record<SkipKind, [one: string, many: string, why: string]> = {
   ],
   emptyTable: ["table row change", "table row changes", "removing them would leave an empty table"],
   field: ["change", "changes", "they cover only part of a field"],
+  reference: [
+    "change",
+    "changes",
+    "removing them would leave a footnote, endnote or comment without its reference",
+  ],
   unusual: ["change", "changes", "they are written in an unusual way"],
   failed: ["change", "changes", "the edits could not be worked out safely"],
 };
@@ -144,6 +150,11 @@ const KEPT_MARKERS = new Set([
   "w:permEnd",
 ]);
 
+/** References whose note or comment would be left behind, unreferenced, if they were removed. */
+const REFERENCES = new Set(["w:footnoteReference", "w:endnoteReference", "w:commentReference"]);
+
+type RowDecision = "keep" | "remove" | "vmerge" | "reference";
+
 /** Children a table may have when it is removed whole because every row goes. */
 const PLAIN_TABLE_CHILDREN = new Set(["w:tblPr", "w:tblGrid", "w:tr"]);
 
@@ -208,7 +219,7 @@ class Walker {
 
   /** Whether the element's start tag declares a namespace (its content would lose it if moved). */
   private declaresNamespace(el: XElement): boolean {
-    const gt = this.source.indexOf(">", el.start);
+    const gt = tagEnd(this.source, el.start + 1);
     const tag = this.source.slice(el.start, gt < 0 || gt > el.end ? el.end : gt + 1);
     return /\sxmlns[:=]/.test(tag);
   }
@@ -311,6 +322,16 @@ class Walker {
       this.skip(t, "unusual");
       return [];
     }
+    if (parent === "w:numPr") {
+      // A numbering change marker: accepting removes the marker, rejecting would have to
+      // remove the numbering itself, which is not done.
+      if (survives && name === "w:ins") {
+        this.count(t, kind, `numbering-${kind}`);
+        return [this.remove(el)];
+      }
+      this.skip(t, "numbering");
+      return [];
+    }
     if (parent === "w:rPr") {
       // A paragraph mark change (w:pPr/w:rPr/w:ins and friends).
       if (survives) {
@@ -337,11 +358,31 @@ class Walker {
       this.skip(t, "field");
       return [];
     }
+    if (this.holdsReference(el)) {
+      this.skip(t, "reference");
+      return [];
+    }
     this.count(t, kind, `${kind}-drop`);
+    return [this.remove(el, this.keptMarkers(el))];
+  }
+
+  /** The range markers inside removed content, also those inside nested changes, in order. */
+  private keptMarkers(el: XElement): string {
     let kept = "";
-    for (const c of elements(el))
+    for (const c of elements(el)) {
       if (KEPT_MARKERS.has(c.name)) kept += this.source.slice(c.start, c.end);
-    return [this.remove(el, kept)];
+      else if (WRAPPERS.has(c.name)) kept += this.keptMarkers(c);
+    }
+    return kept;
+  }
+
+  /** True when the element holds a footnote, endnote or comment reference. */
+  private holdsReference(el: XElement): boolean {
+    for (const c of el.children) {
+      if (typeof c === "string") continue;
+      if (REFERENCES.has(c.name) || this.holdsReference(c)) return true;
+    }
+    return false;
   }
 
   /** True when removing the element cannot leave half a complex field behind. */
@@ -365,26 +406,21 @@ class Walker {
     return begin === end && separate <= begin;
   }
 
-  private rowDecision(tr: XElement): "keep" | "remove" | "skip" {
+  private rowDecision(tr: XElement): RowDecision {
     const trPr = child(tr, "w:trPr");
     const marker = child(trPr, this.mode === "accept" ? "w:del" : "w:ins");
     if (!marker) return "keep";
     const merged = elements(tr).some(
       (tc) => tc.name === "w:tc" && child(child(tc, "w:tcPr"), "w:vMerge") !== undefined,
     );
-    if (merged || !this.fieldsBalanced(tr)) return "skip";
-    return "remove";
+    if (merged || !this.fieldsBalanced(tr)) return "vmerge";
+    return this.holdsReference(tr) ? "reference" : "remove";
   }
 
-  private row(
-    tr: XElement,
-    decision: "keep" | "remove" | "skip",
-    deleted: boolean,
-    t: Tally,
-  ): TextEdit[] {
+  private row(tr: XElement, decision: RowDecision, deleted: boolean, t: Tally): TextEdit[] {
     if (decision === "keep") return this.children(tr, deleted, t);
-    if (decision === "skip") {
-      this.skip(t, "vmerge");
+    if (decision !== "remove") {
+      this.skip(t, decision);
       return [];
     }
     this.countRow(t);
@@ -570,6 +606,25 @@ function plan(ctx: RepairContext, mode: Mode): RepairResult {
       const [one, many, why] = SKIP_WORDS[kind];
       skipped.push(
         `${r.part}: ${n} ${n === 1 ? one : many} left as ${n === 1 ? "it is" : "they are"} (${why})`,
+      );
+    }
+  }
+  // Style and numbering definitions can carry change records too. They are not stories and are
+  // not changed here; say so rather than let "all" overclaim.
+  for (const [type, what] of [
+    ["styles", "style definitions"],
+    ["numbering", "list definitions"],
+  ] as const) {
+    let part: string | undefined;
+    try {
+      part = ctx.pkg.related(ctx.pkg.mainPart, type);
+    } catch {
+      part = undefined;
+    }
+    const text = part ? ctx.text(part) : undefined;
+    if (part && text !== undefined && LOOKS_TRACKED.test(text)) {
+      skipped.push(
+        `${part}: tracked changes in the ${what} are left as they are (only the document's content is covered)`,
       );
     }
   }

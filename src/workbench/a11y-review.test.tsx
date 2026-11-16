@@ -78,6 +78,52 @@ describe("confirm dialog", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
   });
 
+  it("a message too long for the window scrolls and can be reached with Tab; a short one cannot", () => {
+    const heights = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.id === "dialog-message" && (this.textContent ?? "").length > 100 ? 900 : 0;
+      });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(300);
+    try {
+      const long = render(
+        <ConfirmDialog
+          title="Accept all tracked changes?"
+          message={"word/document.xml: accepts 3 insertions\n".repeat(40)}
+          actions={actions}
+          cancelValue="cancel"
+          initialFocus="cancel"
+          onChoose={() => {}}
+        />,
+      );
+      const cancel = screen.getByRole("button", { name: "Cancel" });
+      expect(document.activeElement).toBe(cancel);
+      const region = screen.getByRole("region", { name: "Details" });
+      expect(region.tabIndex).toBe(0);
+      expect(region.className).toBe("dialog-message");
+      fireEvent.keyDown(cancel, { key: "Tab" });
+      expect(document.activeElement).toBe(region);
+      fireEvent.keyDown(region, { key: "Tab", shiftKey: true });
+      expect(document.activeElement).toBe(cancel);
+      long.unmount();
+
+      render(
+        <ConfirmDialog
+          title="t"
+          message="short"
+          actions={actions}
+          cancelValue="cancel"
+          onChoose={() => {}}
+        />,
+      );
+      expect(screen.queryByRole("region")).toBeNull();
+      expect(document.querySelector("#dialog-message")?.hasAttribute("tabindex")).toBe(false);
+    } finally {
+      heights.mockRestore();
+      vi.restoreAllMocks();
+    }
+  });
+
   it("answers Escape with the cancel value", () => {
     const onChoose = vi.fn();
     render(

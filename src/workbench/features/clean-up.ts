@@ -6,6 +6,7 @@
  * changed since. The format decides everything about the repairs; this file only drives them.
  */
 import { splitContainerPath } from "../../core/container-path";
+import type { OpenDocument } from "../../core/documents";
 import type { Feature } from "../feature";
 import type { Workbench } from "../workbench";
 
@@ -28,16 +29,47 @@ export function repairableContainer(wb: Workbench): string | null {
   }
 }
 
-/** Open documents of this container (the view and its parts) that have unsaved edits. */
-function unsavedParts(wb: Workbench, container: string): string[] {
+/** Open documents of this container: its view and its parts. */
+function documentsOf(wb: Workbench, container: string): (OpenDocument & { path: string })[] {
   const lower = container.toLowerCase();
-  const out: string[] = [];
+  const out: (OpenDocument & { path: string })[] = [];
   for (const doc of wb.documents.getState().documents) {
-    if (!doc.path || !wb.isDirty(doc.id)) continue;
+    if (!doc.path) continue;
     const split = splitContainerPath(doc.path);
-    if ((split ? split.container : doc.path).toLowerCase() === lower) out.push(doc.title);
+    if ((split ? split.container : doc.path).toLowerCase() === lower) {
+      out.push({ ...doc, path: doc.path });
+    }
   }
   return out;
+}
+
+/** Open documents of this container (the view and its parts) that have unsaved edits. */
+function unsavedParts(wb: Workbench, container: string): string[] {
+  return documentsOf(wb, container)
+    .filter((doc) => wb.isDirty(doc.id))
+    .map((doc) => doc.title);
+}
+
+/**
+ * Brings the container's open, unedited documents up to date with the file just written, so the
+ * view and part tabs show the result at once (and the file-system event of this write, when it
+ * comes, finds nothing to reload). A part the write did not change keeps its version token and is
+ * left as it is. A document edited meanwhile is left to the external-changes handling.
+ */
+async function refreshOpenDocuments(wb: Workbench, container: string): Promise<void> {
+  for (const doc of documentsOf(wb, container)) {
+    if (wb.isDirty(doc.id)) continue;
+    try {
+      const stat = await wb.platform.statFile(doc.path);
+      if (!stat || stat.modifiedMs === doc.modifiedMs) continue;
+      const data = await wb.platform.readFile(doc.path);
+      const now = wb.documents.getState().documents.find((d) => d.id === doc.id);
+      if (!now || now.path !== doc.path || wb.isDirty(doc.id)) continue;
+      wb.reloadFromDisk(doc.id, data);
+    } catch {
+      // Left for the file watcher to catch up with.
+    }
+  }
 }
 
 /** Runs the whole flow. Resolves true if a repair was applied. */
@@ -56,7 +88,7 @@ export async function cleanUp(wb: Workbench): Promise<boolean> {
   if (unsaved.length > 0) {
     wb.notify({
       kind: "warning",
-      message: `Save or close ${unsaved.join(", ")} first: it has unsaved changes that a clean-up would conflict with.`,
+      message: `Save or close ${unsaved.join(", ")} first: ${unsaved.length === 1 ? "it has" : "they have"} unsaved changes that a clean-up would conflict with.`,
     });
     return false;
   }
@@ -135,9 +167,8 @@ export async function cleanUp(wb: Workbench): Promise<boolean> {
     });
     return false;
   }
-  wb.notify({
-    message: `${plan.title}: done. ${file} was saved; the view updates when the file reloads.`,
-  });
+  await refreshOpenDocuments(wb, container);
+  wb.notify({ message: `${plan.title}: done. ${file} was saved.` });
   return true;
 }
 

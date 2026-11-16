@@ -46,9 +46,13 @@ export function makeContext(source: PartSource): RepairContext & { changes(): Pa
     editor(part) {
       if (editors.has(part)) return editors.get(part) ?? null;
       const doc = names.includes(part) ? pkg.xml(part) : null;
-      // A part with parse problems is not edited: ranges in damaged XML cannot be trusted.
+      // A part with parse problems is not edited: ranges in damaged XML cannot be trusted. Nor is
+      // a part with a DOCTYPE (Word never writes one): its entities can hold text the scanner
+      // does not expand, so a name could survive in the declaration while the reference changes.
       const editor =
-        doc && doc.root && doc.problems.length === 0 ? new PartEditor(part, doc) : null;
+        doc && doc.root && doc.problems.length === 0 && !/<!DOCTYPE/i.test(doc.source)
+          ? new PartEditor(part, doc)
+          : null;
       editors.set(part, editor);
       return editor;
     },

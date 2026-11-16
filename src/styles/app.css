@@ -293,6 +293,23 @@ button {
   color: var(--fg);
 }
 
+/* A long confirmation scrolls inside the dialog; the title and the buttons stay in view. */
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+}
+
+.confirm-dialog .dialog-message {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.confirm-dialog .dialog-actions {
+  flex-shrink: 0;
+}
+
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
