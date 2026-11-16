@@ -28,11 +28,28 @@ export function applyEdits(text: string, edits: readonly TextEdit[]): string {
 }
 
 /**
+ * The offset of the `>` that ends the tag whose body starts at `from`, or -1. Quoted attribute
+ * values are skipped: `>` is allowed in them, so the first `>` is not always the end of the tag.
+ */
+export function tagEnd(source: string, from: number): number {
+  let quote = 0;
+  for (let i = from; i < source.length; i++) {
+    const c = source.charCodeAt(i);
+    if (quote) {
+      if (c === quote) quote = 0;
+    } else if (c === 34 || c === 39) quote = c;
+    else if (c === 62) return i;
+    else if (c === 60) return -1;
+  }
+  return -1;
+}
+
+/**
  * The range of an element's content, between its start tag and its end tag, or null for a
  * self-closing element (which has none). `source` is the text the element was parsed from.
  */
 export function innerRange(source: string, el: XElement): { from: number; to: number } | null {
-  const open = source.indexOf(">", el.start);
+  const open = tagEnd(source, el.start + 1);
   if (open < 0 || open >= el.end) return null;
   if (source.charAt(open - 1) === "/") return null;
   const close = source.lastIndexOf("</", el.end - 1);

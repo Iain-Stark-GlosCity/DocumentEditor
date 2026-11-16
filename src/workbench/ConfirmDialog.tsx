@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { DialogRequest } from "./workbench";
 
 export interface ConfirmDialogProps extends DialogRequest {
@@ -15,6 +15,15 @@ export function ConfirmDialog({
   onChoose,
 }: ConfirmDialogProps) {
   const root = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLParagraphElement>(null);
+  // A message too long for the window scrolls; it then takes a place in the Tab order so it can
+  // be scrolled from the keyboard (and read with the arrow keys).
+  const [scrolls, setScrolls] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = text.current;
+    setScrolls(el !== null && el.scrollHeight > el.clientHeight);
+  }, [message]);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -36,7 +45,9 @@ export function ConfirmDialog({
       return;
     }
     if (event.key !== "Tab") return;
-    const buttons = [...(root.current?.querySelectorAll<HTMLElement>("button") ?? [])];
+    const buttons = [
+      ...(root.current?.querySelectorAll<HTMLElement>('button, [tabindex="0"]') ?? []),
+    ];
     const first = buttons[0];
     const last = buttons[buttons.length - 1];
     if (!first || !last) return;
@@ -57,7 +68,7 @@ export function ConfirmDialog({
     <div className="dialog-backdrop">
       <div
         ref={root}
-        className="dialog"
+        className="dialog confirm-dialog"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
@@ -65,7 +76,13 @@ export function ConfirmDialog({
         onKeyDown={onKeyDown}
       >
         <h2 id="dialog-title">{title}</h2>
-        <p id="dialog-message" style={{ whiteSpace: "pre-line" }}>
+        <p
+          ref={text}
+          id="dialog-message"
+          className="dialog-message"
+          style={{ whiteSpace: "pre-line" }}
+          {...(scrolls ? { tabIndex: 0, role: "region", "aria-label": "Details" } : {})}
+        >
           {message}
         </p>
         <div className="dialog-actions">

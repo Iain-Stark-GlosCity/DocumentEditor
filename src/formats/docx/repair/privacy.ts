@@ -14,6 +14,7 @@ import {
   textOf,
   type XElement,
 } from "../xml";
+import { tagEnd } from "./splice";
 import type { RepairContext, RepairDef } from "./types";
 
 /**
@@ -93,20 +94,6 @@ const MAIN_NAMESPACES = new Set([
 const W15_NAMESPACE = "http://schemas.microsoft.com/office/word/2012/wordml";
 
 const SPAN_RE = /(\s*)([^\s=/>]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
-
-/** The offset of the `>` that ends the tag whose body starts at `from`, or -1. */
-function tagEnd(source: string, from: number): number {
-  let quote = 0;
-  for (let i = from; i < source.length; i++) {
-    const c = source.charCodeAt(i);
-    if (quote) {
-      if (c === quote) quote = 0;
-    } else if (c === 34 || c === 39) quote = c;
-    else if (c === 62) return i;
-    else if (c === 60) return -1;
-  }
-  return -1;
-}
 
 /** The attributes of an element's start tag, as written (raw names). Empty if unreadable. */
 function rawSpans(source: string, el: XElement): AttrSpan[] {
@@ -209,6 +196,13 @@ function authorParts(ctx: RepairContext): string[] {
   if (ctx.names.includes(COMMENTS_PART) && !parts.includes(COMMENTS_PART)) {
     parts.push(COMMENTS_PART);
   }
+  // Change records also sit outside the stories: a formatting change in a style definition or a
+  // numbering level, the glossary (building blocks) document. Any other XML part that has an
+  // author attribute is scanned too; only `w:author` (in the WordprocessingML namespace) is changed.
+  for (const name of ctx.names) {
+    if (parts.includes(name) || name === PEOPLE_PART || !/\.xml$/i.test(name)) continue;
+    if (/author\s*=/.test(ctx.text(name) ?? "")) parts.push(name);
+  }
   return parts;
 }
 
@@ -229,6 +223,8 @@ interface AuthorScan {
   unmatchedInitials: number;
   /** People entries without a name. */
   unnamedPeople: number;
+  /** Sign-in details with only one of the provider and the user id: left alone. */
+  oddSignIns: number;
   damaged: string[];
 }
 
@@ -249,6 +245,7 @@ function scanAuthors(ctx: RepairContext): AuthorScan {
     parts: new Set(),
     unmatchedInitials: 0,
     unnamedPeople: 0,
+    oddSignIns: 0,
     damaged: [],
   };
   const set = (part: string, span: AttrSpan, insert: string) => {
@@ -283,7 +280,7 @@ function scanAuthors(ctx: RepairContext): AuthorScan {
           if (provider && user) {
             set(part, provider, "None");
             set(part, user, pseudonym);
-          }
+          } else if (provider || user) scan.oddSignIns++;
         }
         continue;
       }
@@ -321,6 +318,11 @@ export const anonymiseAuthors: RepairDef = {
       `${plural(scan.people, "person is", "people are")} given a pseudonym. The same person always gets the same one, so who changed what stays traceable.`,
       "Comment initials become A1, A2 and so on. Dates and the text of changes and comments are not touched.",
     ];
+    if (scrubProperties.offer(ctx) !== null) {
+      details.push(
+        "Names in the document properties (author, last saved by, company, manager) are not changed here: 'Remove names from the document properties' does that.",
+      );
+    }
     if (scan.parts.has(PEOPLE_PART)) {
       details.push(
         `${PEOPLE_PART}: names are replaced and the sign-in details are set to the "None" provider that Word writes for someone who is not signed in.`,
@@ -330,6 +332,11 @@ export const anonymiseAuthors: RepairDef = {
     if (scan.unmatchedInitials > 0) {
       skipped.push(
         `${plural(scan.unmatchedInitials, "comment has", "comments have")} initials but no author name, so the initials were left alone`,
+      );
+    }
+    if (scan.oddSignIns > 0) {
+      skipped.push(
+        `${plural(scan.oddSignIns, "entry in the people list has", "entries in the people list have")} sign-in details written in an unusual way, so the sign-in details were left alone (they may identify the person)`,
       );
     }
     if (scan.unnamedPeople > 0) {
@@ -468,9 +475,33 @@ export const removeCustomProperties: RepairDef = {
         `${APP_PART}: empties ${plural(fields.length, "field", "fields")} that can hold a template path or a web address.`,
       );
     }
-    return { details, skipped: damagedLines(damaged(ctx, [CUSTOM_PART, APP_PART])) };
+    const skipped = damagedLines(damaged(ctx, [CUSTOM_PART, APP_PART]));
+    const template = attachedTemplateRels(ctx);
+    if (template) {
+      skipped.push(
+        `${template}: the path of the attached template is kept. It can include a user name or a folder name; this clean-up does not change relationships.`,
+      );
+    }
+    return { details, skipped };
   },
 };
+
+/** The relationships part that holds an external attached template, if there is one. */
+function attachedTemplateRels(ctx: RepairContext): string | undefined {
+  try {
+    const settings = ctx.pkg.related(ctx.pkg.mainPart, "settings");
+    if (!settings) return undefined;
+    for (const rel of ctx.pkg.relsOf(settings).values()) {
+      if (rel.type === "attachedTemplate" && rel.external) {
+        const slash = settings.lastIndexOf("/");
+        return `${settings.slice(0, slash + 1)}_rels/${settings.slice(slash + 1)}.rels`;
+      }
+    }
+  } catch {
+    // An unreadable settings part has nothing to report.
+  }
+  return undefined;
+}
 
 /* ---------- 4. clear descriptive properties ---------- */
 
@@ -484,6 +515,20 @@ const DESCRIPTIVE_FIELDS = [
   "cp:contentStatus",
 ];
 
+/**
+ * Word also writes the title into app.xml (`TitlesOfParts`). Only entries that are exactly the
+ * title in core.xml are emptied: anything else in that list is not known to be the title.
+ */
+function titleCopies(ctx: RepairContext): XElement[] {
+  const title = filled(ctx, CORE_PART, ["dc:title"])[0];
+  const value = title ? textOf(title).trim() : "";
+  const root = ctx.editor(APP_PART)?.doc.root;
+  if (value === "" || !root) return [];
+  return descendants(child(root, "ep:TitlesOfParts"), "vt:lpstr").filter(
+    (el) => textOf(el).trim() === value,
+  );
+}
+
 export const clearDescriptiveProperties: RepairDef = {
   id: "docx.clear-descriptive-properties",
   title: "Clear title, subject, keywords and description",
@@ -495,8 +540,11 @@ export const clearDescriptiveProperties: RepairDef = {
   },
   plan(ctx) {
     const els = filled(ctx, CORE_PART, DESCRIPTIVE_FIELDS);
+    const copies = titleCopies(ctx);
     const editor = ctx.editor(CORE_PART);
     if (editor) for (const el of els) editor.setInner(el, "");
+    const app = ctx.editor(APP_PART);
+    if (app) for (const el of copies) app.setInner(el, "");
     const skipped = damagedLines(damaged(ctx, [CORE_PART]));
     // A preview picture of page 1 can show the document's content. Parts cannot be deleted by
     // this mechanism (only existing text parts are rewritten), so it is reported, not changed.
@@ -510,6 +558,9 @@ export const clearDescriptiveProperties: RepairDef = {
     return {
       details: [
         `${CORE_PART}: empties ${plural(els.length, "field", "fields")} (title, subject, keywords, description, category or status).`,
+        ...(copies.length > 0
+          ? [`${APP_PART}: empties the copy of the title in the list of titles.`]
+          : []),
         "This also removes the title shown for the file in file lists and search results.",
       ],
       skipped,

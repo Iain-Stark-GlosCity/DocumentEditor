@@ -52,8 +52,22 @@ They are level 1 of "editing Word documents": no page-style editing, only precis
 | `docx.clear-descriptive-properties` | privacy.ts | Empties title, subject, keywords, description, category, content status |
 
 Left alone on purpose, and listed to the user as such: paragraph-mark deletions and insertions
-(they merge paragraphs), cell-level revisions, numbering-change records on reject, content in
-`mc:AlternateContent` copies that would diverge, and the thumbnail image (parts cannot be deleted).
+(they merge paragraphs), cell-level revisions, numbering-change records and numbering insertion
+markers on reject, removed content or table rows that hold a footnote, endnote or comment reference
+(the note would be left behind, unreferenced, with its text), content in `mc:AlternateContent`
+copies that would diverge, change records in styles.xml and numbering.xml (reported, not
+changed), and the thumbnail image (parts cannot be deleted). A part with a
+DOCTYPE is never edited (Word never writes one, and its entities could hold names the scanner does
+not expand); it is reported as unreadable.
+
+What the privacy clean-ups do not reach, and say so: the attached template's path in
+`word/_rels/settings.xml.rels` (it can contain a user name; relationships are not changed),
+`dc:creator` and `cp:lastModifiedBy` after "Anonymise authors" (the "Remove names" clean-up does
+those). Not reported, and not touched by any clean-up: names written in the text of the document or
+of comments, `customXml/` items (for example SharePoint metadata), `docMetadata/LabelInfo.xml`,
+document variables in settings.xml, and core properties stored outside `docProps/core.xml`.
+"Anonymise authors" covers every XML part with a `w:author` attribute (styles and numbering too);
+"Clear title…" also empties the copy of the title Word writes in app.xml (`TitlesOfParts`).
 
 Unverified against real Word: that emptied comment parts and the anonymised `people.xml` open
 cleanly. Test a cleaned file in Word before relying on them.
