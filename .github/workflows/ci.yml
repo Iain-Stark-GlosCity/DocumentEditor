@@ -29,6 +29,11 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    # Signing is optional: without these secrets (forks, pull requests, a fresh clone) the
+    # installer is built unsigned. scripts/setup-signing.ps1 creates and stores them.
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -41,7 +46,42 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: npm run tauri -- build
+      - name: Import signing certificate
+        if: ${{ env.WINDOWS_CERTIFICATE != '' }}
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+          $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $pfx
+          $config = @{ bundle = @{ windows = @{
+            certificateThumbprint = $cert.Thumbprint
+            digestAlgorithm = "sha256"
+            timestampUrl = "http://timestamp.digicert.com"
+          } } } | ConvertTo-Json -Depth 6
+          $configPath = Join-Path $env:RUNNER_TEMP "signing.conf.json"
+          Set-Content -Path $configPath -Value $config
+          "SIGNING_CONFIG=$configPath" >> $env:GITHUB_ENV
+          "SIGNING_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+      - name: Build installer
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_CONFIG) {
+            npm run tauri -- build --config $env:SIGNING_CONFIG
+          } else {
+            npm run tauri -- build
+          }
+      - name: Report the signature
+        if: ${{ env.SIGNING_THUMBPRINT != '' }}
+        shell: pwsh
+        run: |
+          Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            "$($_.Name): signer thumbprint $($sig.SignerCertificate.Thumbprint), expected $env:SIGNING_THUMBPRINT, timestamped: $($null -ne $sig.TimeStamperCertificate)"
+            if ($null -eq $sig.SignerCertificate -or $sig.SignerCertificate.Thumbprint -ne $env:SIGNING_THUMBPRINT) { throw "The installer is not signed with the expected certificate." }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: DocumentEditor-windows-installer

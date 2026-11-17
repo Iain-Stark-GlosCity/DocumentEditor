@@ -108,3 +108,8 @@ inspector, Python's zip test and LibreOffice (renders cleanly); not yet opened i
 Known limits: maths and Mermaid become code blocks, SVG/WebP/remote pictures become alt text, the
 created/modified dates are the export time, no EXIF rotation. Small polish seen in LibreOffice: a table
 sits flush against a following code block (no space).
+
+Signing: optional. scripts/setup-signing.ps1 makes a self-signed certificate and stores the GitHub
+secrets; the Windows job signs the installer when they exist (docs/SIGNING.md). The script and the
+signing steps have not been run: the script could not be executed or syntax-checked here (no
+PowerShell), and CI has only exercised the unsigned path.
