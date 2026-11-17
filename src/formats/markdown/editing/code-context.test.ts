@@ -11,7 +11,13 @@ import {
   toggleNumberedList,
   toggleTaskChecked,
 } from "./blocks";
-import { toggleBold, toggleInlineCode, toggleItalic, toggleLink, toggleStrikethrough } from "./inline";
+import {
+  toggleBold,
+  toggleInlineCode,
+  toggleItalic,
+  toggleLink,
+  toggleStrikethrough,
+} from "./inline";
 import { pasteUrl } from "./typing";
 import { makeState, makeView, run, viewNotation } from "./testing";
 import type { EditCommand } from "./syntax";
@@ -92,16 +98,12 @@ describe("pasting a URL over a selection", () => {
   });
 
   it("keeps a label with unbalanced brackets a single link", () => {
-    expect(paste("|a [b|", "https://example.com").out).toBe(
-      "[a \\[b](https://example.com)^",
-    );
+    expect(paste("|a [b|", "https://example.com").out).toBe("[a \\[b](https://example.com)^");
     expect(paste("|a] b|", "https://example.com").out).toBe("[a\\] b](https://example.com)^");
   });
 
   it("leaves a balanced label untouched", () => {
-    expect(paste("|a [b] c|", "https://example.com").out).toBe(
-      "[a [b] c](https://example.com)^",
-    );
+    expect(paste("|a [b] c|", "https://example.com").out).toBe("[a [b] c](https://example.com)^");
   });
 
   it("does not touch already escaped brackets", () => {

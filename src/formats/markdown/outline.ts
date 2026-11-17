@@ -103,8 +103,7 @@ function headingText(doc: Text, heading: SyntaxNode): string {
         if (node.from > pos) out += raw(pos, node.from);
         out += decodeEntity(doc.sliceString(node.from, node.to));
         pos = Math.max(pos, node.to);
-      }
-      else walk(node);
+      } else walk(node);
     }
   };
   walk(heading);

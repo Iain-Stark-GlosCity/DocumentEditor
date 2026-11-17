@@ -21,6 +21,7 @@ import { ribbon } from "./ribbon";
 import { binaryPart } from "./binary-part";
 import { cleanUpFeature } from "./clean-up";
 import { explain } from "./explain";
+import { exportFeature } from "./export";
 import { integrity } from "./integrity";
 import { help } from "./help";
 import { images } from "./images";
@@ -61,6 +62,7 @@ export const defaultFeatures: readonly Feature[] = [
   explain,
   binaryPart,
   cleanUpFeature,
+  exportFeature,
   revealSourceFeature,
   readOnly,
   // F6 and Shift+F6 cycle every visible pane (see pane-focus.ts).

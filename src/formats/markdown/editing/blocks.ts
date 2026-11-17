@@ -178,7 +178,8 @@ function markerFor(
   bullet = "-",
   delimiter = ".",
 ): string {
-  if (kind === "ordered") return `${number}${parsed.kind === "ordered" ? parsed.delimiter : delimiter} `;
+  if (kind === "ordered")
+    return `${number}${parsed.kind === "ordered" ? parsed.delimiter : delimiter} `;
   return kind === "task" ? `${bullet} [ ] ` : `${bullet} `;
 }
 
@@ -225,7 +226,11 @@ function toggleList(kind: ListTarget): EditCommand {
       // An existing marker is replaced; a plain line gets a marker after its indentation.
       const from = p.kind === "none" ? line.from + p.markerStart : replaceFrom;
       const to = p.kind === "none" ? from : replaceTo;
-      changes.push({ from, to, insert: allSame ? "" : markerFor(kind, p, number, bullet, delimiter) });
+      changes.push({
+        from,
+        to,
+        insert: allSame ? "" : markerFor(kind, p, number, bullet, delimiter),
+      });
     });
     return applyLineChanges(target, changes);
   };

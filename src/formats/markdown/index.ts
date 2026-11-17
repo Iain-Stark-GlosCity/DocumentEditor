@@ -45,4 +45,16 @@ export const markdownProvider: TextFormatProvider = {
     return (await loadPipeline()).renderMarkdown(text, context);
   },
   outline: outlineFromState,
+  exporters: [
+    {
+      id: "docx",
+      name: "Word document",
+      fileExtension: "docx",
+      // The converter and the `docx` library are loaded when the first export runs (rule 6).
+      async export(text, context) {
+        const { markdownToDocx } = await import("./export-docx");
+        return markdownToDocx(text, context);
+      },
+    },
+  ],
 };

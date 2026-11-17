@@ -269,12 +269,25 @@ export interface ToolbarOption {
   active?(state: EditorState): boolean;
 }
 
+/** What an exporter is given besides the text: the render context and a way to read files. */
+export interface ExportContext extends RenderContext {
+  /**
+   * Reads a file the document refers to by a path written in it (an image, say): relative to the
+   * document, or a `data:` URL. Resolves null if it cannot be had (missing, remote, too large,
+   * the document is unsaved), so an exporter degrades (alt text instead of a picture) and never fails
+   * for a missing file. Never reaches the network.
+   */
+  readAsset(reference: string): Promise<Uint8Array | null>;
+  /** A title for the exported document: the file name without its extension, or "Untitled". */
+  title: string;
+}
+
 export interface Exporter {
-  /** For example `html`. */
+  /** For example `docx`. */
   id: string;
-  /** For example `HTML`. */
+  /** For example `Word document`. */
   name: string;
   /** Extension of the exported file without the dot. */
   fileExtension: string;
-  export(text: string, context: RenderContext): Promise<Uint8Array>;
+  export(text: string, context: ExportContext): Promise<Uint8Array>;
 }

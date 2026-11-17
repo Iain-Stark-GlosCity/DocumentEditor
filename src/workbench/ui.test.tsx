@@ -34,6 +34,7 @@ describe("menu bar", () => {
       "Open file…Ctrl+O",
       "SaveCtrl+S",
       "Save as…Ctrl+Shift+S",
+      "Export…",
       "Autosave",
       "Close tabCtrl+W",
       "Clean up this file…",

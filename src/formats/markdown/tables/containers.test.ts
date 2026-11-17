@@ -44,8 +44,6 @@ describe("a table whose header is on the line of a list marker", () => {
 describe("tables below a list item keep working", () => {
   it("formats an indented table", () => {
     const result = afterRun("- item\n\n  | a | b |\n  |--|--|\n  | x^ | yyy |", formatTable);
-    expect(result.result).toBe(
-      "- item\n\n  | a   | b   |\n  | --- | --- |\n  | x^   | yyy |",
-    );
+    expect(result.result).toBe("- item\n\n  | a   | b   |\n  | --- | --- |\n  | x^   | yyy |");
   });
 });
