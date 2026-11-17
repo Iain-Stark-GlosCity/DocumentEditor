@@ -100,3 +100,11 @@ should); repairs parse whole parts with no size cap; a deleted field split acros
 elements is skipped (safe, but left in place); the glossary part is not covered; private data the
 clean-ups do not reach is listed in docs/docx-repairs.md (typed names in text, `customXml/`,
 `docMetadata/LabelInfo.xml`, document variables).
+
+File > Export… writes a Markdown document as a Word file (src/formats/markdown/export-docx/): real
+Word styles, headings with bookmarks, lists, tables, quotes, code, pictures sized to the page,
+footnotes; A4, Calibri 11, en-GB; creator empty. Checked with the repo's own Formatting view and
+inspector, Python's zip test and LibreOffice (renders cleanly); not yet opened in real Word.
+Known limits: maths and Mermaid become code blocks, SVG/WebP/remote pictures become alt text, the
+created/modified dates are the export time, no EXIF rotation. Small polish seen in LibreOffice: a table
+sits flush against a following code block (no space).
